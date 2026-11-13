@@ -1,27 +1,56 @@
-# Badminton Object Detection
+# Badminton Singles Video Analysis
 
-> **Status: work in progress.** The dataset loader and training script are in place, but no full training run or benchmark results have been published yet. Results will be added here once available.
+> **Status: work in progress.** Early-stage research project. No final results yet.
+> The baselines below are first versions; numbers in [REPORT.md](REPORT.md) are working
+> measurements, not final results.
 
-Detect the **two players** and the **shuttlecock** in broadcast badminton footage with
-Faster R-CNN (MobileNetV3-Large FPN), trained on the
-[BFMD](https://openaccess.thecvf.com/content/CVPR2026W/CVsports/papers/Ding_BFMD_A_Full-Match_Badminton_Dense_Dataset_for_Dense_Shot_Captioning_CVPRW_2026_paper.pdf)
-full-match badminton dataset.
+## Goal
 
-| Label | Class | Source in BFMD |
-|---|---|---|
-| 0 | background | — |
-| 1 | `top_player` (far side of the court) | `annotations/player_bbox` (manual) |
-| 2 | `bottom_player` (near side) | `annotations/player_bbox` (manual) |
-| 3 | `shuttle` | `annotations/shuttle` (TrackNet predictions) |
+Build a computer-vision pipeline that turns broadcast badminton singles video
+into structured data and player-level insight. The long-term goal is a system
+that detects players and the shuttlecock, estimates pose, recognizes hits and
+shot types, measures player movement, and later summarizes a player's style
+and weaknesses for coaches.
 
-The 12 men's singles matches provide **329,168 annotated rally frames** (1280×720, 30 fps).
-The 7 doubles matches in BFMD have no boxes and are not used.
+## Current focus (Milestone 1)
 
-## Milestone 1: singles analysis (`badminton_analysis/`)
+Working on the BFMD dataset (Full-Match Badminton Dense dataset), using cached annotations
+from 12 BWF Super 1000 men's singles matches (2025). The analysis code is in
+`badminton_analysis/`; evidence and data checks are in [REPORT.md](REPORT.md) and
+[AUDIT.md](AUDIT.md).
 
-A separate package for hit detection, shot types and movement features on the BFMD annotations.
-It does not touch the detection code below. Results and evidence are in [REPORT.md](REPORT.md),
-and the data audit is in [AUDIT.md](AUDIT.md).
+| Item | Status |
+|---|---|
+| **Data layer and court calibration**: BFMD annotations parsed into per-match arrays; court homography from BFMD's court corners; player positions in court metres | Baseline implemented |
+| **Hit-event detection**: from shuttle trajectory changes and wrist motion, evaluated against annotated hit events with a frame tolerance | Baseline implemented |
+| **Shot-type recognition**: a simple skeleton + trajectory baseline, evaluated with a match-level split (held-out matches) | Baseline implemented |
+| **Movement features**: distance covered, speed, court-zone occupancy and recovery position, measured in court coordinates | Baseline implemented (measurements only) |
+| **Player and shuttle detection**: Faster R-CNN detector for the two players and the shuttle (`train.py`) | In progress: code in place, no training results yet |
+| **Shuttle tracking**: TrackNetV3 as the reference model | In progress: comparison code on branch `task5-tracknetv3`, not merged |
+| **Player tracking** (near and far player) | Planned: players currently come from BFMD's manual boxes |
+| **Pose estimation including foot keypoints** | Planned: currently uses BFMD's provided COCO-17 pose (ankles, no foot keypoints) |
+
+## Roadmap
+
+- **Phase 1**: detect players, shuttle and pose; court calibration.
+- **Phase 2**: hit-type recognition, footwork analysis, per-player stats board.
+  Footwork "error" definitions are still undecided and will be designed with a
+  coach; for now only measurable movement features are computed.
+- **Phase 3**: player style summary with uncertainty estimates, weakness
+  detection (with confidence intervals and minimum sample sizes), and
+  evidence-based strategy suggestions for coaches.
+
+## Scope and limitations
+
+- Singles only, broadcast video first. Own-camera data may come later.
+- The dataset contains the same players across many matches, so results may
+  not generalize to unseen players. Evaluation is split by match
+  (leave-one-match-out); for shot types, per-player results are also reported separately.
+- Datasets, videos and model checkpoints are not included in this repo.
+  Source video comes from public BWF broadcasts; check the dataset and video
+  terms before reuse.
+
+## Running Milestone 1
 
 ```bash
 uv sync
@@ -44,16 +73,21 @@ change only `paths`, then pass `--config`.
 ## Project layout
 
 ```
+badminton_analysis/    Milestone 1: data layer, court model, hits, shot types, movement
+configs/               paths and parameters (default.yaml, colab.yaml)
+notebooks/             Colab notebook for Milestone 1
+tests/                 unit tests (synthetic data) + checks on the real data (skipped if absent)
 badminton_dataset.py   BFMD -> PyTorch detection dataset + extract / stats / show CLI
-train.py               training + per-class mAP@0.5 validation
-main.py                Pascal VOC detection dataset (earlier experiment)
-dataset/               local data: extracted frames, annotation cache, VOC (git-ignored)
+train.py               detector training + per-class AP@0.5 validation (in progress)
+main.py                Pascal VOC detection dataset (earlier experiment, unrelated)
+dataset/               local data: extracted frames, annotation cache (git-ignored)
 trained_models/        checkpoints (git-ignored)
 ```
 
 ## Setup
 
-Requires Python ≥ 3.10 and a CUDA GPU for reasonable training speed.
+Requires Python ≥ 3.10. A CUDA GPU is needed for reasonable detector training speed; Milestone 1
+runs on the CPU.
 
 ```bash
 uv sync            # or: pip install torch torchvision opencv-python tqdm
@@ -70,8 +104,8 @@ uv sync            # or: pip install torch torchvision opencv-python tqdm
    cd <BFMD_data>
    python download_youtube.py
    ```
-3. Extract the annotated frames once. Decoding is sequential, which is much faster than
-   seeking into the video for every sample:
+3. Extract the annotated frames once (only needed for the detector). Decoding is sequential,
+   which is much faster than seeking into the video for every sample:
    ```bash
    python badminton_dataset.py extract --video-root <BFMD_data>/videos --out dataset/bfmd_frames --stride 5
    ```
@@ -86,7 +120,13 @@ python badminton_dataset.py stats                                         # fram
 python badminton_dataset.py show --frames-root dataset/bfmd_frames --index 0 --out sample.jpg
 ```
 
-## Training
+## Detector training (in progress)
+
+Faster R-CNN (MobileNetV3-Large FPN) for three classes: `top_player` (far side),
+`bottom_player` (near side) and `shuttle`. Player boxes come from BFMD's manual
+`annotations/player_bbox`; shuttle boxes from `annotations/shuttle` (TrackNet predictions).
+Only the 12 singles matches have boxes; the 7 doubles matches are not used.
+No full training run has been reported yet.
 
 ```bash
 python train.py --amp
@@ -124,7 +164,7 @@ After each epoch the script reports AP@0.5 per class and their mean, and saves
 - **No `Normalize` in the transforms.** torchvision detection models normalise inputs
   themselves.
 
-## Using the dataset in your own code
+### Using the dataset in your own code
 
 ```python
 from torch.utils.data import DataLoader
@@ -152,10 +192,19 @@ frames where the shuttle was tracked. Parsed annotations are cached in `dataset/
 - Shuttle boxes come from TrackNet, not from people. They have a fixed size and some
   frames are noisy or missing the shuttle (about 4% of frames).
 - In BFMD, player-box frame numbers run one frame ahead of the rally boundaries in
-  `metadata/`. Each annotation file's own frame numbers are used as they are.
+  `metadata/`. The detector dataset uses each annotation file's own frame numbers as they are;
+  Milestone 1 aligns the sources with the frame shifts in `configs/default.yaml`.
 - Video copyright belongs to BWF TV; don't redistribute the videos or the extracted frames.
 
-## Citation
+## References
+
+- BFMD: Ding, Fujii, Tamaki, "BFMD: A Full-Match Badminton Dense Dataset for
+  Dense Shot Captioning" (arXiv:2603.25533; CVPR 2026 Workshops)
+- TrackNetV3: Chen and Wang, "TrackNetV3: Enhancing ShuttleCock Tracking with
+  Augmentations and Trajectory Rectification" (ACM MMAsia 2023)
+- BST: Chang, "BST: Badminton Stroke-type Transformer for Skeleton-based
+  Action Recognition in Racket Sports" (arXiv:2502.21085)
+- ShuttleSet / ShuttleSet22 stroke-level datasets (Wang et al.)
 
 ```bibtex
 @InProceedings{Ding_2026_CVPR,
