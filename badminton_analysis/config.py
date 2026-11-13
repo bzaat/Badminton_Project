@@ -67,9 +67,23 @@ class Config:
         return int(self.raw.get("frame_shift", {}).get(source, 0))
 
 
+def _deep_merge(base: dict, over: dict) -> dict:
+    out = dict(base)
+    for k, v in over.items():
+        out[k] = _deep_merge(out[k], v) if isinstance(v, dict) and isinstance(out.get(k), dict) else v
+    return out
+
+
 def load_config(path: str | os.PathLike | None = None) -> Config:
-    """Load a YAML config (default: configs/default.yaml)."""
+    """Load a YAML config (default: configs/default.yaml).
+
+    A config may start with `base: other.yaml` (relative to its own folder); it is then a set of
+    overrides deep-merged onto that base. configs/colab.yaml uses this to change only the paths.
+    """
     path = Path(path) if path is not None else DEFAULT_CONFIG
     with open(path, encoding="utf-8") as f:
-        raw = yaml.safe_load(f)
+        raw = yaml.safe_load(f) or {}
+    base = raw.pop("base", None)
+    if base:
+        raw = _deep_merge(load_config(path.parent / base).raw, raw)
     return Config(raw=raw, path=path)
