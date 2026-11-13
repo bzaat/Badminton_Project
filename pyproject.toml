@@ -1,7 +1,7 @@
 [project]
-name = "voc-dataset-detection"
+name = "badminton-singles-analysis"
 version = "0.1.0"
-description = "Add your description here"
+description = "Work in progress: computer-vision analysis of broadcast badminton singles video (BFMD)"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
