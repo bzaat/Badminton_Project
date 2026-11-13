@@ -1,0 +1,114 @@
+# Milestone 1 configuration. Relative paths are resolved against the repo root.
+# For Colab, copy this file (e.g. configs/colab.yaml) and change only `paths`.
+
+paths:
+  # Unzipped BFMD package (folder that contains annotations/). Can be overridden with
+  # the BFMD_ROOT environment variable.
+  bfmd_root: /mnt/d/badminton/BFMD_data-20261026T161257Z-1-001/BFMD_data
+  cache_dir: dataset/bfmd_m1        # per-match arrays built from the raw JSON (git-ignored)
+  output_dir: outputs               # reports, figures, CSVs (git-ignored)
+  video_root: null                  # folder with <match>.mp4 files, if/when videos exist
+
+video:
+  width: 1280
+  height: 720
+  fps: 30
+
+# Per-source frame shifts added to the raw frame numbers before they are aligned
+# (aligned_frame = raw_frame + shift). Values are set from `validate`'s measurements,
+# see REPORT.md / outputs/task1/validation.md for the evidence.
+#   player_bbox +1: pose boxes equal the manual boxes one frame later (IoU 0.97-1.00 at that
+#                   shift in all 12 matches vs ~0.90 unshifted); pose clip keys, metadata rally
+#                   intervals and hit frames already agree with each other, so they are the reference.
+#   shuttle 0:      shuttle-wrist closest approach at hits is smallest at shift 0 in 9/12 matches.
+# These are RELATIVE alignments between sources; absolute alignment to decoded video frames
+# cannot be checked until a video is available.
+frame_shift:
+  player_bbox: 1
+  shuttle: 0
+  pose: 0
+
+pose:
+  min_keypoint_score: 0.3           # keypoints below this are treated as missing
+  min_assign_iou: 0.1               # pose box <-> manual player box IoU needed to trust the match
+  # Ground contact point in the image (projected with the court homography):
+  #   from ankles:  y = mean(confident ankle y) + ankle_ground_offset * box_height
+  #   from the box: y = box_bottom            + box_ground_offset   * box_height
+  # Raw ankles sit ~0.15 box heights above the box bottom. On the far side 1 m of court depth is
+  # only ~20 px, so that offset put far players ~1.5 m too deep (servers 4.3 m vs 2.7 m from the
+  # net at the two ends). 0.10 was fitted on 6 matches (server symmetry) and gives |top-bottom|
+  # <= 0.04 m for servers AND receivers on the other 6. See REPORT.md, Task 1.
+  ankle_ground_offset: 0.10
+  box_ground_offset: -0.05          # = 0.10 - 0.15 (median ankle-to-box-bottom gap)
+
+court:
+  # Court model in metres, BWF Laws of Badminton. Origin = far-left outer (doubles) corner,
+  # x to the right, y towards the camera. Net at y = length / 2.
+  length: 13.40
+  width_doubles: 6.10
+  width_singles: 5.18
+  short_service_from_net: 1.98
+  long_service_doubles_from_back: 0.76
+  # Which court lines the BFMD `court/` corners mark. Checked by `validate` (net posts
+  # stand on the doubles sidelines, so their projection must land at x = 0 and x = 6.10).
+  corners_are: doubles_outer
+  # court_perframe samples (~1 Hz) further than this from a frame give "unknown" camera state
+  perframe_max_gap: 20
+  # A rally is flagged `suspect` when, on main-camera frames, more than this fraction of frames
+  # put the top player's feet in the near half or the bottom player's in the far half.
+  # Video check (China Open F): such rallies are a different broadcast camera that the ~1 Hz
+  # court detector wrongly marks valid.
+  max_wrong_half_frac: 0.2
+
+# ----------------------------------------------------------------------------- Task 2: hits
+hits:
+  derivative_step: 2        # d in accel = |(p[t+d]-p[t]) - (p[t]-p[t-d])| / d
+  peak_radius: 5            # default suppression radius (pose-only baseline); the shuttle variants tune it
+  dev_matches: [Indonesia]  # design choices were explored on these only; others are reported separately
+  outlier_px: 40            # shuttle outlier test: max(outlier_px, outlier_speed_frac * speed)
+  outlier_speed_frac: 0.5
+  max_interp_gap: 5         # fill shuttle gaps up to 5 frames before differentiating
+  prox_window: 2            # wrist-shuttle distance: min over +-2 frames
+  wrist_window: 3           # wrist speed: max over +-3 frames
+  tolerances: [1, 2, 3, 5]  # frames (30 fps); +-2 is the primary metric (agreed)
+  primary_tolerance: 2
+  split: leave_one_match_out
+  # grids searched on the 11 training matches of each fold (selection metric: F1 at +-2)
+  grid:
+    peak_radius: [3, 4, 5, 6]                           # accel local maxima within +-r frames
+    accel: [4, 6, 8, 10, 13, 16, 20, 25, 32, 40]          # px / frame^2
+    proximity: [0.25, 0.5, 0.75, 1.0, .inf]               # wrist-shuttle distance / box height
+    wrist_speed: [0.0, 0.02, 0.04, 0.08]                  # box heights / frame
+    offset: [-2, -1, 0, 1, 2]                             # frames added to the candidate frame
+    keep_without_pose: [true, false]
+  logistic_grid:                                          # learned scorer over candidate features
+    threshold: [0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.55, 0.6, 0.7]
+    offset: [-2, -1, 0, 1, 2]
+  pose_only_grid:                                         # baseline without the shuttle
+    score: [0.02, 0.04, 0.06, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3]
+    offset: [-3, -2, -1, 0, 1, 2, 3]
+
+# ----------------------------------------------------------------------------- Task 3: shot types
+shots:
+  split: leave_one_match_out
+  models: [majority, logreg, hgb]
+  main_model: hgb               # used for per-player results, ablation and end-to-end
+  # fixed a priori (not tuned on any split)
+  logreg_C: 1.0
+  hgb_max_iter: 300
+  hgb_learning_rate: 0.08
+  hgb_max_leaf_nodes: 31
+  ablation_max_iter: 120
+
+# ----------------------------------------------------------------------------- Task 4: movement
+movement:
+  smooth_window: 9              # frames, centred moving average (see validation in REPORT.md)
+  windows_checked: [1, 3, 5, 7, 9, 15]
+  max_gap: 5                    # fill foot-track gaps up to 5 frames
+  use_box_fallback: false       # only ankle-based ground points (box fallback is coarser)
+  max_depth_m: 8.5              # drop points implausibly far from the net / centre line
+  max_lateral_m: 4.0
+  min_main_camera_frac: 0.5     # skip rallies mostly filmed by other cameras
+  exclude_suspect: true         # skip rallies flagged suspect in Task 1
+  implausible_speed_mps: 7.0    # only reported, not removed
+  stationary_frames_before_serve: 12

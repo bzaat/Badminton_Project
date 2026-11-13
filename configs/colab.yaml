@@ -1,0 +1,12 @@
+# Google Colab: same settings as default.yaml, only the paths differ.
+# Expected Google Drive layout (My Drive/badminton/):
+#   data/BFMD_data/annotations/...   BFMD annotation folders (copied to /content by the notebook)
+#   videos/<match>.mp4               broadcast videos (read directly from Drive)
+#   outputs/                         results written by the notebook (persist across sessions)
+base: default.yaml
+
+paths:
+  bfmd_root: /content/BFMD_data                         # local copy: much faster than reading Drive
+  cache_dir: /content/cache/bfmd_m1                     # rebuilt each session (~1-2 min)
+  output_dir: /content/drive/MyDrive/badminton/outputs
+  video_root: /content/drive/MyDrive/badminton/videos

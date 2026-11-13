@@ -17,6 +17,30 @@ full-match badminton dataset.
 The 12 men's singles matches provide **329,168 annotated rally frames** (1280×720, 30 fps).
 The 7 doubles matches in BFMD have no boxes and are not used.
 
+## Milestone 1: singles analysis (`badminton_analysis/`)
+
+A separate package for hit detection, shot types and movement features on the BFMD annotations.
+It does not touch the detection code below. Results and evidence are in [REPORT.md](REPORT.md),
+and the data audit is in [AUDIT.md](AUDIT.md).
+
+```bash
+uv sync
+uv run python -m badminton_analysis all          # everything below in one go (~8 min, CPU)
+uv run python -m badminton_analysis build        # parse BFMD JSON -> dataset/bfmd_m1/
+uv run python -m badminton_analysis validate     # data checks -> outputs/task1/
+uv run python -m badminton_analysis viz --match Antonsen-DEN-3-vs.-Chou --game 1 --rally 2
+uv run python -m badminton_analysis task2        # hit detection    -> outputs/task2/
+uv run python -m badminton_analysis task3        # shot types       -> outputs/task3/
+uv run python -m badminton_analysis task4        # movement CSVs    -> outputs/task4/
+uv run pytest
+```
+
+Google Colab: open `notebooks/colab_milestone1.ipynb` (uses `configs/colab.yaml`).
+
+Paths, frame shifts and thresholds live in `configs/default.yaml`. The BFMD location can also be
+set with `BFMD_ROOT=/path/to/BFMD_data`. For another machine (e.g. Colab), copy the config and
+change only `paths`, then pass `--config`.
+
 ## Project layout
 
 ```
