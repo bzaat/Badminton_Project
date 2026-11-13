@@ -299,6 +299,43 @@ Full table: `outputs/task4/report.md`.
 
 ---
 
+## Task 5: TrackNetV3 on raw video — status: IN PROGRESS (paused)
+
+**Done so far:**
+- Comparison code: `badminton_analysis/task5.py`, with tests.
+- CLI commands: `task5-clip` cuts a clip of clean rallies from a match video; `task5-eval`
+  compares a TrackNetV3 CSV with the BFMD shuttle track and writes metrics plus overlay images.
+- **Caveat for the results:** BFMD's shuttle track is itself TrackNet output, so the comparison
+  measures tracker agreement, not accuracy.
+
+**TrackNetV3 facts (verified from the code):**
+| item | value |
+|---|---|
+| repo | qaz812345/TrackNetV3, commit `6eda442` |
+| licence | MIT, explicitly covering the checkpoints |
+| checkpoint | `TrackNetV3_ckpts.zip`, Google Drive ID `1CfzE87a0f6LhBp0kniSl1-89zaLCZ8cA`, 126 MB, SHA-256 `8de68d34ea2457e368e22947f1309143d60a6a7f9ddccd31cd526d4c4571bcc4` |
+| zip contents | `ckpts/TrackNet_best.pt` (136 MB), `ckpts/InpaintNet_best.pt` (6 MB) |
+| output | `<clip>_ball.csv` with columns `Frame, Visibility, X, Y` |
+
+**Changes needed for current PyTorch / Python** (found by running it with torch 2.14 on the
+local GPU):
+1. `requirements.txt` pins torch 1.10, numpy 1.22 and opencv 4.4, which don't install on current
+   Python. Use the current libraries instead; inference imports fine with them.
+2. `test.py` (imported by `predict.py`) needs **`pycocotools`**, which is missing from
+   `requirements.txt`; `parse` is needed too.
+3. Use `--large_video`: without it, `predict.py` loads the whole clip into RAM (≈ 4 GB for 50 s
+   of 720p).
+4. Use **`--max_sample_num 300`**: the default of 1,800 frames for the background median was
+   **killed for running out of memory (exit 137 at 5.8 GB)** on this machine.
+5. Still to check: `torch.load` without `weights_only`. torch ≥ 2.6 defaults to
+   `weights_only=True`, and the checkpoints are dicts with a `param_dict`.
+
+**Next steps:**
+1. Run TrackNetV3 on the 50 s test clip (China Open F, video frames 14339–15847, 3 clean
+   rallies), with the settings in points 3–4 above.
+2. Run `task5-eval`.
+3. Write the Colab notebook (T4 GPU) from the verified steps.
+
 ## Milestone 1: how to reproduce
 
 ```bash

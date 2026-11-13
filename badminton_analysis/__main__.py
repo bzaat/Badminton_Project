@@ -46,6 +46,13 @@ def main(argv: list[str] | None = None) -> int:
     t4 = sub.add_parser("task4", help="movement measurements -> outputs/task4/")
     t4.add_argument("--match", default=None)
     sub.add_parser("all", help="Milestone 1 end to end: build, validate, viz-samples, task2, task3, task4")
+    c5 = sub.add_parser("task5-clip", help="cut a clip of clean rallies from a match video (for TrackNetV3)")
+    c5.add_argument("--match", required=True); c5.add_argument("--video", required=True)
+    c5.add_argument("--out", required=True); c5.add_argument("--rallies", type=int, default=3)
+    e5 = sub.add_parser("task5-eval", help="compare a TrackNetV3 CSV with the BFMD shuttle track -> outputs/task5/")
+    e5.add_argument("--match", required=True); e5.add_argument("--pred", required=True, help="<clip>_ball.csv")
+    e5.add_argument("--clip-start", type=int, required=True, help="video frame of clip frame 0")
+    e5.add_argument("--video", default=None, help="full match video, for overlay images")
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     cfg = load_config(a.config)
@@ -56,6 +63,24 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\n===== {' '.join(step)} =====", flush=True)
             main((["--config", a.config] if a.config else []) + step)
         print(f"\nMilestone 1 done in {time.time() - t:.0f}s. Reports: {cfg.output_dir}/task{{1,2,3,4}}/ and REPORT.md")
+        return 0
+    if a.cmd == "task5-clip":
+        from .build import load_match
+        from .task5 import extract_clip, pick_clip
+        m = _select(cfg, a.match)
+        if len(m) > 1:
+            sys.exit("ambiguous --match:\n  " + "\n  ".join(m))
+        start, end = pick_clip(load_match(cfg, m[0]), n_rallies=a.rallies)
+        n = extract_clip(a.video, start, end, a.out)
+        print(json.dumps({"match": m[0], "clip": a.out, "clip_start": start, "clip_end": end, "frames": n}))
+        return 0
+    if a.cmd == "task5-eval":
+        from .task5 import run as run5
+        m = _select(cfg, a.match)
+        if len(m) > 1:
+            sys.exit("ambiguous --match:\n  " + "\n  ".join(m))
+        r = run5(cfg, m[0], a.pred, a.clip_start, a.video)
+        print(json.dumps({k: v for k, v in r.items() if k not in ("frames_over_50px", "overlays")}, indent=1))
         return 0
     if a.cmd == "list":
         for m in _select(cfg, None):
