@@ -63,11 +63,81 @@ uv run pytest                                     # 36 tests (5 need the real da
    have two consecutive hits from the same side; one 1-frame hit gap (Malaysia Open F).
 5. Camera state comes from ~1 Hz samples, so camera cuts shorter than ~1 s can be mislabelled.
 
+### Video check (one match, China Open 2025 F, 720p30 video-only stream, 4,965.0 s = BFMD's 4,965.1 s)
+- **Absolute alignment confirmed:** the shuttle annotation and the wrist keypoints sit on the
+  shuttle / wrist in the *same* decoded frame and are visibly off at ±1
+  (`outputs/task1/video_check/shuttle_alignment_grid.jpg`, `player_alignment_hit.jpg`).
+  So shuttle +0, pose +0 and player_bbox +1 are correct against the video, not just relative.
+- **Suspect rallies explained (for this match):** rally g1 r10 is a *different broadcast camera*
+  (side angle). The static court overlay does not match the court, yet `court_perframe` marks it
+  `valid`. Boxes and poses are correct; only the camera-state label is wrong.
+
 ### Limitations
-- All alignment is **relative** between annotation sources; absolute alignment to decoded video
-  frames, and the cause of the suspect rallies, need at least one video.
+- Alignment was checked against video for one match only.
 - The ground-point offset is one global constant; the static homography is only valid for the
   main camera.
 
+---
+
+## Task 2: hit-event baseline — status: done
+
+```bash
+uv run python -m badminton_analysis task2   # ~65 s -> outputs/task2/{report.md, metrics.json, *.csv, task2_summary.png}
+```
+
+### Method
+Image-space signals per rally frame: shuttle acceleration (velocity change over 2-frame steps,
+after removing TrackNet outliers and filling ≤ 5-frame gaps), turn angle, shuttle speed,
+wrist–shuttle distance and wrist speed (both relative to the player's box height). Candidates are
+local maxima of acceleration (suppression radius r). Two scorers on those candidates:
+- **rules** (`full`): acceleration ≥ A, nearest wrist within P box heights, wrist speed ≥ S;
+- **logistic**: logistic regression over 7 candidate features.
+
+**Evaluation:** leave-one-match-out. Every parameter (r, thresholds, frame offset, regression
+weights) is chosen on the other 11 matches and evaluated on the held-out match. One-to-one
+matching within ±tolerance. Design exploration (suppression radius, normalisation, timing
+refinement) used only the 3 Indonesia matches; the other 9 were never inspected while designing.
+
+### Results (pooled over the 12 held-out matches)
+| variant | F1 @±1 | P / R / **F1 @±2** | F1 @±3 | F1 @±5 | macro F1 @±2 | F1 @±2 dev / not-dev |
+|---|---|---|---|---|---|---|
+| shuttle only | 0.615 | 0.701 / 0.679 / **0.690** | 0.732 | 0.775 | 0.687 ± 0.063 | 0.640 / 0.707 |
+| + wrist proximity | 0.641 | 0.767 / 0.682 / **0.722** | 0.764 | 0.807 | 0.720 ± 0.060 | 0.664 / 0.743 |
+| + wrist speed (`full`) | 0.641 | 0.770 / 0.680 / **0.723** | 0.764 | 0.807 | 0.720 ± 0.060 | 0.666 / 0.743 |
+| **logistic** | 0.651 | 0.759 / 0.716 / **0.737** | 0.783 | 0.825 | 0.735 ± 0.061 | 0.689 / 0.754 |
+| pose only (reference) | 0.178 | 0.232 / 0.376 / **0.287** | 0.395 | 0.535 | 0.288 ± 0.013 | 0.283 / 0.289 |
+
+- Pose adds +3.2 F1 points over the shuttle alone (mostly precision, via wrist proximity);
+  wrist *speed* adds nothing on top of proximity. The shuttle is essential (pose only: 0.29).
+- No sign of design overfitting: the 9 never-inspected matches score higher than the dev matches.
+- Large between-tournament differences: Malaysia Open 0.82–0.85, Indonesia Open 0.67–0.71.
+- Logistic weights (standardized): wrist proximity −1.57, shuttle speed +0.95, missing pose
+  +0.92, turn angle +0.64, wrist speed +0.53, log accel −0.19 (stable across folds, std ≤ 0.03).
+
+### Failure analysis (logistic, ±2)
+- **Serves are nearly undetected:** recall 0.126 (serve) / 0.082 (flick serve); the shuttle
+  starts from rest and is visible on only 59 % of serve frames (dev matches). Recall excluding
+  serves: **0.768**. 875 of 3,212 misses are the first hit of a rally.
+- **Timing:** 1,255 misses have a prediction 3–8 frames away. On the dev matches, every way of
+  picking the frame (acceleration peak, wrist–shuttle closest approach, maximum turn, 1-frame
+  acceleration) puts only 70–72 % of near-hit candidates within ±2 of the label. A video check
+  of 3 disagreements found the label at contact in 2 (detector late on a smash, early on a drop)
+  and the label ~4 frames late in 1 (net shot). Both sources err; with n = 3 this is anecdotal.
+- Other misses: 1,254 candidates scored below threshold (weak net shots / blocks: recall 0.71 /
+  0.63), 432 with the shuttle missing, 271 with no trajectory peak at all.
+- False positives: 1,885 mid-rally (largely the timing pairs above), 298 after the last hit
+  (shuttle landing), 190 duplicates, 152 at annotated bounces / net hits; 359 have a removed
+  shuttle outlier within ±3 frames.
+- Hitter side (nearest wrist) is correct for 81.0 % of detected hits.
+- Clean rallies F1 0.747 vs flagged rallies (suspect / < 50 % main camera / no serve) 0.688.
+
+### Limitations / next steps for hits
+- Every signal is derived from annotations (TrackNet shuttle, BFMD pose); errors there cap the
+  baseline. Rally intervals come from the annotations too, so this is "hits within known rallies".
+- A small manual re-annotation of contact frames from the video (e.g. 100 hits) would measure
+  label timing noise and tell how much of the ±2 gap is label noise.
+- Serve detection needs a dedicated cue (e.g. server pose before the first shuttle motion).
+
 ### Next step
-Task 2 (hit-event baseline), with the agreed ±2-frame primary tolerance (also ±1/±3/±5).
+Task 3: shot-type baseline (small transparent model on skeleton + trajectory features),
+leave-one-match-out, with per-player results.

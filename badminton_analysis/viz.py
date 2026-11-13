@@ -60,6 +60,60 @@ def wrist_speed(md: MatchData, rows: slice, side: int, min_score: float) -> np.n
     return np.r_[np.nan, v]
 
 
+def read_frames(video_path: str | Path, frames: list[int]) -> dict[int, np.ndarray]:
+    """Decode the requested 0-based frames (BGR) from a video, seeking once per frame."""
+    import cv2
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise FileNotFoundError(video_path)
+    out = {}
+    for f in sorted(set(int(x) for x in frames)):
+        cap.set(cv2.CAP_PROP_POS_FRAMES, f)
+        ok, img = cap.read()
+        if ok:
+            out[f] = img
+    cap.release()
+    return out
+
+
+def draw_frame_overlay(img: np.ndarray, md: MatchData, frame: int, model: CourtModel | None = None,
+                       min_score: float = 0.3) -> np.ndarray:
+    """Draw the annotations of one frame on a video image (BGR copy): court lines, player
+    boxes (thin), pose skeletons, shuttle (circle), ground points (filled dots)."""
+    import cv2
+    img = img.copy()
+    model = model or CourtModel()
+    calib = md.calibration(model)
+    for name, seg in model.lines():
+        p = calib.to_image(seg).round().astype(int)
+        cv2.line(img, tuple(p[0]), tuple(p[1]), (0, 200, 0) if name != "net" else (0, 200, 255), 1, cv2.LINE_AA)
+    row = int(md.rows_for_frames(np.array([frame]))[0])
+    if row < 0:
+        cv2.putText(img, f"frame {frame}: not in a rally", (10, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+        return img
+    colors = {TOP: (10, 113, 232), BOTTOM: (31, 34, 197)}  # BGR versions of SIDE_COLOR
+    for s in (TOP, BOTTOM):
+        b = md.player_box_px[row, s]
+        if not np.isnan(b).any():
+            cv2.rectangle(img, (int(b[0]), int(b[1])), (int(b[2]), int(b[3])), colors[s], 1)
+        if md.pose_assign[row, s] > 0:
+            kp = md.pose_kp_px[row, s]
+            for i, j in COCO_SKELETON:
+                if kp[i, 2] >= min_score and kp[j, 2] >= min_score:
+                    cv2.line(img, (int(kp[i, 0]), int(kp[i, 1])), (int(kp[j, 0]), int(kp[j, 1])), colors[s], 2, cv2.LINE_AA)
+        fp = md.foot_px[row, s]
+        if not np.isnan(fp).any():
+            cv2.circle(img, (int(fp[0]), int(fp[1])), 4, (255, 255, 0), -1)
+    sh = md.shuttle_px[row]
+    if not np.isnan(sh).any():
+        cv2.circle(img, (int(round(sh[0])), int(round(sh[1]))), 9, (0, 255, 255), 2, cv2.LINE_AA)
+    flag = {0: "main camera", 1: "refit", 2: "no court", -1: "unknown"}[int(md.court_flag[row])]
+    r = md.rallies[int(md.rally_idx[row])]
+    cv2.putText(img, f"frame {frame} | g{r['game']} r{r['index']} | {flag}", (10, 25),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+    return img
+
+
 def plot_rally(md: MatchData, rally_idx: int, out: str | Path, model: CourtModel | None = None,
                background: np.ndarray | None = None, min_score: float = 0.3) -> str:
     """Render one rally to `out` (PNG). Returns the path written."""
