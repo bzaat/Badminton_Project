@@ -41,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("viz-samples", help="one typical rally per match + every suspect rally")
     t2 = sub.add_parser("task2", help="hit detection: LOMO tuning + evaluation -> outputs/task2/")
     t2.add_argument("--match", default=None, help="restrict to matches containing this (for quick tests)")
+    t3 = sub.add_parser("task3", help="shot types: LOMO evaluation -> outputs/task3/")
+    t3.add_argument("--match", default=None)
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     cfg = load_config(a.config)
@@ -103,6 +105,11 @@ def main(argv: list[str] | None = None) -> int:
         t = time.time()
         run(cfg, _select(cfg, a.match) if a.match else None)
         print(f"task2 done in {time.time() - t:.0f}s -> {cfg.output_dir / 'task2' / 'report.md'}")
+    elif a.cmd == "task3":
+        from .task3 import run as run3
+        t = time.time()
+        run3(cfg, _select(cfg, a.match) if a.match else None)
+        print(f"task3 done in {time.time() - t:.0f}s -> {cfg.output_dir / 'task3' / 'report.md'}")
     return 0
 
 

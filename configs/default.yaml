@@ -87,3 +87,15 @@ hits:
   pose_only_grid:                                         # baseline without the shuttle
     score: [0.02, 0.04, 0.06, 0.08, 0.1, 0.13, 0.16, 0.2, 0.25, 0.3]
     offset: [-3, -2, -1, 0, 1, 2, 3]
+
+# ----------------------------------------------------------------------------- Task 3: shot types
+shots:
+  split: leave_one_match_out
+  models: [majority, logreg, hgb]
+  main_model: hgb               # used for per-player results, ablation and end-to-end
+  # fixed a priori (not tuned on any split)
+  logreg_C: 1.0
+  hgb_max_iter: 300
+  hgb_learning_rate: 0.08
+  hgb_max_leaf_nodes: 31
+  ablation_max_iter: 120
