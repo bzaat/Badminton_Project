@@ -39,6 +39,8 @@ def main(argv: list[str] | None = None) -> int:
     z.add_argument("--rally", type=int, required=True, help="0-based rally index within the game")
     z.add_argument("--out", default=None)
     sub.add_parser("viz-samples", help="one typical rally per match + every suspect rally")
+    t2 = sub.add_parser("task2", help="hit detection: LOMO tuning + evaluation -> outputs/task2/")
+    t2.add_argument("--match", default=None, help="restrict to matches containing this (for quick tests)")
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     cfg = load_config(a.config)
@@ -96,6 +98,11 @@ def main(argv: list[str] | None = None) -> int:
                 plot_rally(md, i, out_dir / f"{tag}_{m}_g{r['game']}_r{r['index']:03d}.png")
                 n += 1
         print(f"wrote {n} figures to {out_dir}")
+    elif a.cmd == "task2":
+        from .task2 import run
+        t = time.time()
+        run(cfg, _select(cfg, a.match) if a.match else None)
+        print(f"task2 done in {time.time() - t:.0f}s -> {cfg.output_dir / 'task2' / 'report.md'}")
     return 0
 
 
