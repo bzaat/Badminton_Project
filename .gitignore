@@ -17,5 +17,19 @@ trained_models/
 *.pth
 sample.jpg
 
+# Milestone 1 outputs, checkpoints and media (never commit these)
+outputs/
+checkpoints/
+runs/
+*.pt
+*.ckpt
+*.onnx
+*.npz
+*.mp4
+*.avi
+*.mov
+*.parquet
+.pytest_cache/
+
 # IDE
 .idea/

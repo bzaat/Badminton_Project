@@ -1,0 +1,60 @@
+# Milestone 1 configuration. Relative paths are resolved against the repo root.
+# For Colab, copy this file (e.g. configs/colab.yaml) and change only `paths`.
+
+paths:
+  # Unzipped BFMD package (folder that contains annotations/). Can be overridden with
+  # the BFMD_ROOT environment variable.
+  bfmd_root: /mnt/d/badminton/BFMD_data-20261026T161257Z-1-001/BFMD_data
+  cache_dir: dataset/bfmd_m1        # per-match arrays built from the raw JSON (git-ignored)
+  output_dir: outputs               # reports, figures, CSVs (git-ignored)
+  video_root: null                  # folder with <match>.mp4 files, if/when videos exist
+
+video:
+  width: 1280
+  height: 720
+  fps: 30
+
+# Per-source frame shifts added to the raw frame numbers before they are aligned
+# (aligned_frame = raw_frame + shift). Values are set from `validate`'s measurements,
+# see REPORT.md / outputs/task1/validation.md for the evidence.
+#   player_bbox +1: pose boxes equal the manual boxes one frame later (IoU 0.97-1.00 at that
+#                   shift in all 12 matches vs ~0.90 unshifted); pose clip keys, metadata rally
+#                   intervals and hit frames already agree with each other, so they are the reference.
+#   shuttle 0:      shuttle-wrist closest approach at hits is smallest at shift 0 in 9/12 matches.
+# These are RELATIVE alignments between sources; absolute alignment to decoded video frames
+# cannot be checked until a video is available.
+frame_shift:
+  player_bbox: 1
+  shuttle: 0
+  pose: 0
+
+pose:
+  min_keypoint_score: 0.3           # keypoints below this are treated as missing
+  min_assign_iou: 0.1               # pose box <-> manual player box IoU needed to trust the match
+  # Ground contact point in the image (projected with the court homography):
+  #   from ankles:  y = mean(confident ankle y) + ankle_ground_offset * box_height
+  #   from the box: y = box_bottom            + box_ground_offset   * box_height
+  # Raw ankles sit ~0.15 box heights above the box bottom. On the far side 1 m of court depth is
+  # only ~20 px, so that offset put far players ~1.5 m too deep (servers 4.3 m vs 2.7 m from the
+  # net at the two ends). 0.10 was fitted on 6 matches (server symmetry) and gives |top-bottom|
+  # <= 0.04 m for servers AND receivers on the other 6. See REPORT.md, Task 1.
+  ankle_ground_offset: 0.10
+  box_ground_offset: -0.05          # = 0.10 - 0.15 (median ankle-to-box-bottom gap)
+
+court:
+  # Court model in metres, BWF Laws of Badminton. Origin = far-left outer (doubles) corner,
+  # x to the right, y towards the camera. Net at y = length / 2.
+  length: 13.40
+  width_doubles: 6.10
+  width_singles: 5.18
+  short_service_from_net: 1.98
+  long_service_doubles_from_back: 0.76
+  # Which court lines the BFMD `court/` corners mark. Checked by `validate` (net posts
+  # stand on the doubles sidelines, so their projection must land at x = 0 and x = 6.10).
+  corners_are: doubles_outer
+  # court_perframe samples (~1 Hz) further than this from a frame give "unknown" camera state
+  perframe_max_gap: 20
+  # A rally is flagged `suspect` when, on main-camera frames, more than this fraction of frames
+  # put the top player's feet in the near half or the bottom player's in the far half.
+  # (Whole rallies like this exist in two China Open matches; cause unknown without video.)
+  max_wrong_half_frac: 0.2
