@@ -43,10 +43,20 @@ def main(argv: list[str] | None = None) -> int:
     t2.add_argument("--match", default=None, help="restrict to matches containing this (for quick tests)")
     t3 = sub.add_parser("task3", help="shot types: LOMO evaluation -> outputs/task3/")
     t3.add_argument("--match", default=None)
+    t4 = sub.add_parser("task4", help="movement measurements -> outputs/task4/")
+    t4.add_argument("--match", default=None)
+    sub.add_parser("all", help="Milestone 1 end to end: build, validate, viz-samples, task2, task3, task4")
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     cfg = load_config(a.config)
 
+    if a.cmd == "all":
+        t = time.time()
+        for step in (["build"], ["validate", "--no-alignment"], ["viz-samples"], ["task2"], ["task3"], ["task4"]):
+            print(f"\n===== {' '.join(step)} =====", flush=True)
+            main((["--config", a.config] if a.config else []) + step)
+        print(f"\nMilestone 1 done in {time.time() - t:.0f}s. Reports: {cfg.output_dir}/task{{1,2,3,4}}/ and REPORT.md")
+        return 0
     if a.cmd == "list":
         for m in _select(cfg, None):
             print(m)
@@ -110,6 +120,11 @@ def main(argv: list[str] | None = None) -> int:
         t = time.time()
         run3(cfg, _select(cfg, a.match) if a.match else None)
         print(f"task3 done in {time.time() - t:.0f}s -> {cfg.output_dir / 'task3' / 'report.md'}")
+    elif a.cmd == "task4":
+        from .task4 import run as run4
+        t = time.time()
+        run4(cfg, _select(cfg, a.match) if a.match else None)
+        print(f"task4 done in {time.time() - t:.0f}s -> {cfg.output_dir / 'task4' / 'report.md'}")
     return 0
 
 

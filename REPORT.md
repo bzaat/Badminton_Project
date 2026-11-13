@@ -138,6 +138,183 @@ refinement) used only the 3 Indonesia matches; the other 9 were never inspected 
   label timing noise and tell how much of the ±2 gap is label noise.
 - Serve detection needs a dedicated cue (e.g. server pose before the first shuttle motion).
 
-### Next step
-Task 3: shot-type baseline (small transparent model on skeleton + trajectory features),
-leave-one-match-out, with per-player results.
+---
+
+## Task 3: shot-type baseline — status: done
+
+```bash
+uv run python -m badminton_analysis task3   # ~5 min -> outputs/task3/{report.md, metrics.json, predictions.csv, confusion_fine.png}
+```
+
+### Method
+37 named features per hit, in 4 groups:
+- **context:** hit index in the rally, time since the previous / until the next hit, side;
+- **shuttle:** velocity before and after the hit and its rise, in hitter body heights, in the
+  hitter's body frame; shuttle position relative to the hitter at contact;
+- **court position:** hitter / opponent position in metres, and the next hitter's position as a
+  landing proxy;
+- **pose:** upper-body joints relative to the hips, wrist above shoulder, wrist speed.
+
+Models: majority class, logistic regression and gradient-boosted trees (`hgb`), with
+hyperparameters **fixed in the config, not tuned**. Leave-one-match-out over the 12 matches,
+evaluated on the **annotated** hits (main setting) and on Task 2's detections (end-to-end).
+Features use the whole rally (offline analysis, not real-time).
+
+### Results (held-out, pooled over 12 matches)
+| model | 12 classes: accuracy | 12 classes: macro F1 [95 % CI] | 10 merged classes: macro F1 |
+|---|---|---|---|
+| majority | 0.254 | 0.034 | 0.041 |
+| logistic regression | 0.737 | 0.647 [0.601, 0.677] | 0.685 |
+| **hgb** | **0.792** | **0.710 [0.662, 0.738]** | **0.736** |
+
+- CIs come from a match-level bootstrap (2,000 resamples of whole matches).
+- hgb − logreg = +0.048 to +0.082 macro F1 (paired CI), so the difference is robust.
+- Per-match macro F1 for hgb: 0.687 ± 0.075.
+- Merged scheme: serve + flick_serve → serve, and net_kill + press → net_attack.
+
+**Per class (hgb), F1:**
+- strong: serve 0.95, lift 0.89, net_shot 0.88, smash 0.85, clear 0.80, flick_serve 0.79;
+- weak: block 0.71, drop 0.69, net_kill 0.54, drive 0.52, push 0.47, press 0.43.
+
+**Main confusions** (row-normalised), between strokes that look alike:
+- press → drive 0.26, drive → block 0.19, push → lift 0.18, drop → smash 0.14.
+
+**Feature groups** (hgb, 120 iterations, macro F1):
+| setting | macro F1 |
+|---|---|
+| all features | 0.710 |
+| only context | 0.554 |
+| only position | 0.538 |
+| only shuttle | 0.527 |
+| only pose | 0.344 |
+| all minus context | 0.662 |
+| all minus shuttle | 0.672 |
+| all minus position | 0.680 |
+| all minus pose | 0.701 |
+
+Every group adds something. Pose contributes least (−0.009); the 2D skeleton at one frame
+says little beyond where the shuttle goes.
+
+### Players: generalisation caveat
+Only 9 players across 12 matches; Shi Yu Qi plays 7 matches, Antonsen 5. For most held-out
+hits the hitter (and always the opponent) was in the training data. Kodai Naraoka, Kunlavut
+Vitidsarn and Alex Lanier each appear in a single match, so their hits are truly unseen when
+that match is held out:
+
+| hitter in training? | hits | accuracy | macro F1 |
+|---|---|---|---|
+| seen | 9,772 | 0.791 | 0.705 |
+| unseen | 1,529 | 0.793 | 0.723 |
+
+- No drop for unseen players here, but this is **3 players, 1,529 hits**, all against seen
+  opponents, from the same 4 tournaments and broadcast style. That is weak evidence, not proof
+  of generalisation to new players.
+- Per player, accuracy ranges from 0.653 (Wang Zheng Xing; his 2 matches are the China Open
+  ones with the most camera problems) to 0.846 (Li Shi Feng).
+- Clean rallies: macro F1 0.746. Flagged rallies (suspect / < 50 % main camera / no serve):
+  0.526. The flagged set includes the 139 rallies whose first annotated hit is not a serve,
+  where the "first hit" context feature misleads.
+
+### End-to-end (classify Task 2 detections, ±2)
+| | value |
+|---|---|
+| detections / annotated hits / matched | 10,505 / 11,301 / 8,024 |
+| accuracy on matched detections (macro F1) | 0.678 (0.535) |
+| annotated hits detected **and** correctly classified | 0.482 |
+| detections that are a real hit of the correct class | 0.518 |
+
+Detection errors propagate: a missed or 3-frame-off hit also corrupts the neighbours' context
+features.
+
+---
+
+## Task 4: movement features — status: done (measurements only)
+
+```bash
+uv run python -m badminton_analysis task4   # ~5 s -> outputs/task4/*.csv, report.md, occupancy_heatmaps.png
+```
+
+### What is measured
+Court metres from the ankle-based ground point (Task 1), main-camera frames only, smoothed with
+a 9-frame centred moving average after filling gaps of ≤ 5 frames. 977 of 1,058 rallies are
+used (suspect or < 50 % main-camera rallies excluded); 95.1 % of their frames are valid.
+
+**CSV outputs:**
+- `rally_player_movement.csv` (rally × player): distance, mean / p95 / max speed, time share in
+  a 3 × 3 grid of the player's own half (front / mid / rear × left / centre / right, in the
+  player's own left-right), outside fraction.
+- `shot_recovery.csv` (9,722 hits followed by an opponent hit): hitter position at the hit and at
+  the opponent's next contact, path length, displacement, peak speed, time available, shot type.
+- `player_match_summary.csv` (match × player): totals, m per minute of play, median speeds,
+  zone shares, median position at the opponent's contact ("recovery position").
+
+Nothing is labelled a footwork "error". These are inputs for the coach-defined analysis later.
+
+### Validation
+**Noise floor.** The laws require server and receiver to stand still until the serve, so speed
+measured just before the serve is measurement noise (or allowed weight shifts):
+
+| smoothing (frames) | far player | near player |
+|---|---|---|
+| none | 0.166 m/s | 0.133 m/s |
+| 9 (used) | 0.104 m/s | 0.083 m/s |
+
+It plateaus from about 7 frames. n ≈ 430 pre-serve segments per side.
+
+**Distance depends on smoothing; there is no plateau.**
+
+| smoothing (frames) | 1 | 5 | 9 | 15 |
+|---|---|---|---|---|
+| total distance (km) | 50.8 | 40.3 | 36.2 | 32.6 |
+
+- At the 9-frame setting, the noise floor accounts for ≈ 1.8 km (≈ 5 %), and larger windows also
+  cut real direction changes.
+- **Absolute distances are uncertain by roughly ±10–20 %**. Compare only values produced with the
+  same settings.
+
+**Far-side bias.**
+- All 9 players measure faster on the far side than on the near side: median rally mean speed
+  +0.02 to +0.37 m/s, typically about +0.07 (two-sided sign test p ≈ 0.004).
+- This is measurement, not behaviour: there are fewer pixels per metre on the far side.
+- Players change ends every game, so per-match totals mostly average it out. Rally-level
+  comparisons should account for the side.
+
+**Plausibility.**
+- Speed over valid frames: p50 1.53, p95 4.19, p99 6.24 m/s; 0.65 % of frames > 7 m/s.
+- Recovery positions cluster 3.6–4.1 m from the net and within ±0.2 m of the centre line.
+- Occupancy maps show the expected four-corner "X" pattern.
+
+**Known bias.** The ground point is the midpoint of both ankles, so in a lunge it sits between
+the feet. Reach towards the net (little occupancy within 2 m of it) and towards the back
+corners is understated.
+
+### Per-match values
+| | range |
+|---|---|
+| distance per player | 0.94–2.20 km |
+| distance per minute of rally play | 101–124 m/min |
+| median rally mean speed | 1.63–1.99 m/s |
+
+Full table: `outputs/task4/report.md`.
+
+---
+
+## Milestone 1: how to reproduce
+
+```bash
+uv sync
+uv run python -m badminton_analysis all     # build, validate, viz-samples, task2, task3, task4 (~8 min, CPU)
+uv run pytest                               # 63 tests
+```
+
+- **Colab:** `notebooks/colab_milestone1.ipynb` with `configs/colab.yaml` (same settings,
+  different paths).
+- **Clean-checkout reproducibility:** running only the committed files with a fresh cache gave
+  identical numbers (hit F1 0.736737, shot macro F1 0.709614).
+
+## Overall limitations
+- **Data:** 12 matches, 9 players and 4 tournaments, all from BWF broadcasts. Every signal comes
+  from annotations (TrackNet shuttle, BFMD pose, a manual timeline), so annotation errors cap all
+  four tasks.
+- **Video check:** done for one match.
+- **Licences:** the BFMD dataset licence and the BWF video terms are still unverified (AUDIT.md).
