@@ -66,18 +66,42 @@ def load_tracknet_csv(path: str | Path) -> dict[str, np.ndarray]:
             "xy": np.array([[float(r["X"]), float(r["Y"])] for r in rows], np.float64).reshape(-1, 2)}
 
 
-def compare(md, pred: dict, clip_start: int) -> dict:
-    """Agreement between TrackNetV3 (pred, clip frame numbering) and BFMD on rally frames."""
+def _pairs(md, pred: dict, clip_start: int, shift: int = 0):
+    """Rally frames of the clip: (video frames, BFMD xy, BFMD visible, TrackNetV3 visible).
+    `shift` reads BFMD at video frame + shift (to check the frame alignment)."""
     vf = pred["frame"] + clip_start                       # video frame numbers
-    rows = md.rows_for_frames(vf)
+    rows = md.rows_for_frames(vf + shift)
     inside = rows >= 0                                    # BFMD has shuttle data only inside rallies
     bf = md.shuttle_px[rows[inside]].astype(np.float64)
-    b_vis = ~np.isnan(bf[:, 0])
-    p_vis = pred["visible"][inside]
+    return vf, inside, bf, ~np.isnan(bf[:, 0]), pred["visible"][inside]
+
+
+def _runs(frames: np.ndarray) -> list[list[int]]:
+    """Consecutive frame numbers -> [[start, length], ...]."""
+    if not len(frames):
+        return []
+    cut = np.where(np.diff(frames) != 1)[0] + 1
+    return [[int(r[0]), int(len(r))] for r in np.split(frames, cut)]
+
+
+def compare(md, pred: dict, clip_start: int, max_shift: int = 3) -> dict:
+    """Agreement between TrackNetV3 (pred, clip frame numbering) and BFMD on rally frames,
+    plus a frame-shift sweep (median distance with BFMD read `shift` frames later)."""
+    sweep = {}
+    for s in range(-max_shift, max_shift + 1):
+        _, ins, bf, bv, pv = _pairs(md, pred, clip_start, s)
+        e = np.linalg.norm(pred["xy"][ins][bv & pv] - bf[bv & pv], axis=1)
+        sweep[s] = round(float(np.median(e)), 2) if len(e) else None
+    vf, inside, bf, b_vis, p_vis = _pairs(md, pred, clip_start)
     both = b_vis & p_vis
     err = np.linalg.norm(pred["xy"][inside][both] - bf[both], axis=1)
     pct = lambda q: float(np.percentile(err, q)) if len(err) else None  # noqa: E731
+    big = vf[inside][both][err > 50]
     return {
+        "median_px_by_frame_shift": sweep,
+        "best_frame_shift": min((k for k in sweep if sweep[k] is not None), key=lambda k: sweep[k], default=None),
+        "within_2px": float(np.mean(err <= 2)) if len(err) else None,
+        "disagreement_runs_over_50px": _runs(big),
         "frames_in_clip": int(len(vf)), "frames_in_rallies": int(inside.sum()),
         "both_visible": int(both.sum()), "only_bfmd": int((b_vis & ~p_vis).sum()),
         "only_tracknetv3": int((~b_vis & p_vis).sum()), "neither": int((~b_vis & ~p_vis).sum()),
@@ -143,6 +167,11 @@ def run(cfg: Config, match: str, pred_csv: str | Path, clip_start: int, video: s
     if res["both_visible"]:
         L += [f"Visibility agreement {res['visibility_agreement']:.3f}. Position difference where both see it: "
               f"median {res['error_px_median']:.1f} px, mean {res['error_px_mean']:.1f}, p90 {res['error_px_p90']:.1f}; "
-              f"within 5 / 10 / 20 px: {res['within_5px']:.3f} / {res['within_10px']:.3f} / {res['within_20px']:.3f}."]
+              f"within 2 / 5 / 10 / 20 px: {res['within_2px']:.3f} / {res['within_5px']:.3f} / "
+              f"{res['within_10px']:.3f} / {res['within_20px']:.3f}.", "",
+              "Frame-alignment check (median px with BFMD read `shift` frames later; the best should be 0): "
+              + ", ".join(f"{k:+d}: {v}" for k, v in res["median_px_by_frame_shift"].items()), "",
+              "Disagreement runs over 50 px ([first video frame, length]); look at these frames, "
+              "either tracker can be the wrong one: " + str(res["disagreement_runs_over_50px"])]
     (out / "report.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     return res

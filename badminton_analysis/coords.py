@@ -21,9 +21,14 @@ def percent_box_to_xyxy(x: float, y: float, w: float, h: float, width: int, heig
 
 
 def percent_box_center(x: float, y: float, w: float, h: float, width: int, height: int) -> np.ndarray:
-    """Centre of a percent box in pixels (used for the TrackNet shuttle position)."""
+    """Centre of a percent box in pixels. (Not for the BFMD shuttle: see `raw.load_shuttle`.)"""
     b = percent_box_to_xyxy(x, y, w, h, width, height)
     return np.array([(b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0])
+
+
+def percent_point(x: float, y: float, width: int, height: int) -> np.ndarray:
+    """Percent point (0-100) -> pixels. Used for the BFMD shuttle position."""
+    return np.array([x * width / 100.0, y * height / 100.0])
 
 
 def normalized_to_px(xy: np.ndarray, width: int, height: int) -> np.ndarray:

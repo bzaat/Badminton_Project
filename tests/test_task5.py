@@ -34,3 +34,20 @@ def test_compare_counts_and_errors(cfg):  # noqa: F811
     assert r["only_tracknetv3"] == 2 and r["only_bfmd"] == 1 and r["both_visible"] == 7
     assert r["error_px_median"] == pytest.approx(0.0, abs=0.06) and r["within_5px"] == pytest.approx(1.0)
     assert r["visibility_agreement"] == pytest.approx(7 / 10)
+
+
+def test_runs_groups_consecutive_frames():
+    from badminton_analysis.task5 import _runs
+    assert _runs(np.array([5, 6, 7, 10, 12, 13])) == [[5, 3], [10, 1], [12, 2]]
+    assert _runs(np.array([], np.int64)) == []
+
+
+def test_frame_shift_sweep_finds_the_offset(cfg):  # noqa: F811
+    md = build_match(cfg, syn.MATCH)[0]
+    frame = np.arange(14)
+    vf = frame + 98
+    # TrackNetV3 one frame late: at video frame f it reports the BFMD position of f - 1
+    xy = np.c_[400 + 10 * (vf - 1 - 100), np.full(14, 300.0)]
+    r = compare(md, {"frame": frame, "visible": np.ones(14, bool), "xy": xy}, clip_start=98)
+    assert r["best_frame_shift"] == -1 and r["median_px_by_frame_shift"][-1] == pytest.approx(0.0, abs=0.06)
+    assert r["error_px_median"] == pytest.approx(10.0, abs=0.06) and r["disagreement_runs_over_50px"] == []

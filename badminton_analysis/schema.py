@@ -12,7 +12,7 @@ Player axis (size 2)
 Arrays (NaN = missing for floats)
     frame          (F,)          int64    aligned frame number
     rally_idx      (F,)          int32    index into `rallies`
-    shuttle_px     (F, 2)        float32  TrackNet shuttle centre, pixels
+    shuttle_px     (F, 2)        float32  TrackNet shuttle position (box x, y), pixels
     player_box_px  (F, 2, 4)     float32  manual player box, xyxy pixels
     pose_kp_px     (F, 2, 17, 3) float32  COCO-17 keypoints: x px, y px, confidence
     pose_box_px    (F, 2, 4)     float32  box the pose was estimated in (xyxy px)
@@ -46,7 +46,7 @@ import numpy as np
 
 from .court import CourtCalibration, CourtModel
 
-SCHEMA_VERSION = 4  # bump whenever build output changes
+SCHEMA_VERSION = 5  # bump whenever build output changes
 N_KP = 17
 TOP, BOTTOM = 0, 1
 SIDE_INDEX = {"top": TOP, "bottom": BOTTOM}

@@ -100,7 +100,8 @@ def write(root: Path) -> dict:
     sh_seq = []
     for f in range(100, 110):
         px = np.array([400 + 10 * (f - 100), 300.0])
-        sh_seq.append({"frame": f, "enabled": True, "x": px[0] / W * 100 - 0.4, "y": px[1] / H * 100 - 0.7111,
+        # shuttle position = box (x, y) corner, as measured on video (see raw.load_shuttle)
+        sh_seq.append({"frame": f, "enabled": True, "x": px[0] / W * 100, "y": px[1] / H * 100,
                        "width": 0.8, "height": 1.4222, "rotation": 0})
     sh_seq[3].update({"x": 0, "y": 0})          # TrackNet "not visible" -> dropped
     sh_seq[4]["enabled"] = False               # disabled -> dropped

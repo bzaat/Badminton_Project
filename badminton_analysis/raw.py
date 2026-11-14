@@ -14,7 +14,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .coords import percent_box_center, percent_box_to_xyxy
+from .coords import percent_box_to_xyxy, percent_point
 from .court import CORNER_ORDER
 
 PERFRAME_FLAGS = {"valid": 0, "refit": 1, "no_court": 2}  # -1 = unknown
@@ -132,8 +132,12 @@ def load_caption_winners(ann_root: Path, match: str) -> dict[tuple[int, int], st
 
 # --------------------------------------------------------------------------- tracks
 def load_shuttle(ann_root: Path, match: str, width: int, height: int) -> tuple[np.ndarray, np.ndarray]:
-    """TrackNet shuttle centres. Returns frames (K,) int64 and xy (K, 2) pixels.
+    """TrackNet shuttle positions. Returns frames (K,) int64 and xy (K, 2) pixels.
 
+    The shuttle is the box's (x, y) corner, NOT its centre. BFMD's README says centre =
+    (x + w/2, y + h/2), but every shuttle box is a fixed 10.24 x 10.24 px dummy, and on video
+    (China Open F, Task 5) the (x, y) point sits on the shuttle while the "centre" is 5.12 px
+    down-right of it. TrackNetV3 run independently agrees with (x, y) (median 2.2 px).
     Entries with enabled=False or a (0, 0) position (TrackNet's "not visible") are dropped.
     """
     res = _read(Path(ann_root) / "shuttle" / f"{match}.json")["predictions"][0]["result"]
@@ -143,7 +147,7 @@ def load_shuttle(ann_root: Path, match: str, width: int, height: int) -> tuple[n
             if not s.get("enabled", True) or (s["x"] <= 0 and s["y"] <= 0):
                 continue
             frames.append(int(s["frame"]))
-            xy.append(percent_box_center(s["x"], s["y"], s["width"], s["height"], width, height))
+            xy.append(percent_point(s["x"], s["y"], width, height))
     order = np.argsort(frames, kind="stable")
     return np.asarray(frames, np.int64)[order], np.asarray(xy, np.float64).reshape(-1, 2)[order]
 
