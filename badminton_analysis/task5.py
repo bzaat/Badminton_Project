@@ -129,7 +129,9 @@ def overlays(video: str | Path, md, pred: dict, clip_start: int, out_dir: Path, 
     if not cand:
         return []
     cand.sort(reverse=True)
-    picks = [i for _, i in cand[: n // 2]] + [i for _, i in cand[:: max(len(cand) // (n - n // 2), 1)][: n - n // 2]]
+    worst = [i for _, i in cand[: n // 2]]
+    spaced = [i for _, i in cand[n // 2:][:: max((len(cand) - n // 2) // (n - n // 2), 1)][: n - n // 2]]
+    picks = list(dict.fromkeys(worst + spaced))        # no frame twice
     imgs = read_frames(video, [int(vf[i]) for i in picks])
     paths = []
     out_dir.mkdir(parents=True, exist_ok=True)

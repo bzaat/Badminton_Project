@@ -299,7 +299,7 @@ Full table: `outputs/task4/report.md`.
 
 ---
 
-## Task 5: TrackNetV3 on raw video — status: local run done; Colab notebook to do
+## Task 5: TrackNetV3 on raw video — status: done (local run + Colab notebook)
 
 ```bash
 uv run python -m badminton_analysis task5-clip --match Wang-Zheng-Xing-CHN-F --video <match.mp4> --out clip.mp4
@@ -381,7 +381,18 @@ uv run --project <repo> --with parse --with pycocotools python predict.py --vide
     --save_dir pred_out --large_video --max_sample_num 300
 ```
 
-**Next step:** Colab notebook (T4 GPU) from these verified steps.
+### Colab notebook: `notebooks/colab_task5_tracknetv3.ipynb` (T4 GPU)
+Runs the steps above end to end: clones this repo and TrackNetV3 at `6eda442`, copies only this
+match's BFMD files from Drive, downloads the checkpoints once with `gdown` (cached in
+`My Drive/badminton/task5/`, SHA-256 checked), cuts the clip, runs `predict.py` with the flags
+above, runs `task5-eval` (results in `My Drive/badminton/outputs/task5/`), and checks the metrics
+against the local run with tolerances.
+
+**Tested** by executing every cell with `nbclient` against a copy of the Drive layout (fresh
+GitHub clone, real checkpoint download, local GPU): 615 s in total, clip identical (start
+14339, 1,508 frames), predictions **byte-identical** to the local run, so all metrics in the
+table above are reproduced exactly. Not yet run on a Colab T4 itself; there a different PyTorch /
+OpenCV build may move a few frames, which the tolerance check reports.
 
 ## Milestone 1: how to reproduce
 

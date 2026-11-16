@@ -36,6 +36,7 @@ uv run pytest
 ```
 
 Google Colab: open `notebooks/colab_milestone1.ipynb` (uses `configs/colab.yaml`).
+Task 5 (TrackNetV3 vs BFMD shuttle track, T4 GPU): `notebooks/colab_task5_tracknetv3.ipynb`.
 
 Paths, frame shifts and thresholds live in `configs/default.yaml`. The BFMD location can also be
 set with `BFMD_ROOT=/path/to/BFMD_data`. For another machine (e.g. Colab), copy the config and
