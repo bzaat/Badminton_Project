@@ -102,34 +102,34 @@ refinement) used only the 3 Indonesia matches; the other 9 were never inspected 
 | variant | F1 @±1 | P / R / **F1 @±2** | F1 @±3 | F1 @±5 | macro F1 @±2 | F1 @±2 dev / not-dev |
 |---|---|---|---|---|---|---|
 | shuttle only | 0.615 | 0.701 / 0.679 / **0.690** | 0.732 | 0.775 | 0.687 ± 0.063 | 0.640 / 0.707 |
-| + wrist proximity | 0.641 | 0.767 / 0.682 / **0.722** | 0.764 | 0.807 | 0.720 ± 0.060 | 0.664 / 0.743 |
-| + wrist speed (`full`) | 0.641 | 0.770 / 0.680 / **0.723** | 0.764 | 0.807 | 0.720 ± 0.060 | 0.666 / 0.743 |
-| **logistic** | 0.651 | 0.759 / 0.716 / **0.737** | 0.783 | 0.825 | 0.735 ± 0.061 | 0.689 / 0.754 |
+| + wrist proximity | 0.637 | 0.754 / 0.685 / **0.718** | 0.761 | 0.804 | 0.715 ± 0.061 | 0.663 / 0.737 |
+| + wrist speed (`full`) | 0.637 | 0.757 / 0.683 / **0.718** | 0.761 | 0.804 | 0.716 ± 0.061 | 0.664 / 0.738 |
+| **logistic** | 0.651 | 0.757 / 0.716 / **0.736** | 0.782 | 0.824 | 0.735 ± 0.062 | 0.690 / 0.753 |
 | pose only (reference) | 0.178 | 0.232 / 0.376 / **0.287** | 0.395 | 0.535 | 0.288 ± 0.013 | 0.283 / 0.289 |
 
-- Pose adds +3.2 F1 points over the shuttle alone (mostly precision, via wrist proximity);
+- Pose adds +2.8 F1 points over the shuttle alone (mostly precision, via wrist proximity);
   wrist *speed* adds nothing on top of proximity. The shuttle is essential (pose only: 0.29).
 - No sign of design overfitting: the 9 never-inspected matches score higher than the dev matches.
 - Large between-tournament differences: Malaysia Open 0.82–0.85, Indonesia Open 0.67–0.71.
-- Logistic weights (standardized): wrist proximity −1.57, shuttle speed +0.95, missing pose
-  +0.92, turn angle +0.64, wrist speed +0.53, log accel −0.19 (stable across folds, std ≤ 0.03).
+- Logistic weights (standardized): wrist proximity −1.49, shuttle speed +0.94, missing pose
+  +0.86, turn angle +0.63, wrist speed +0.53, log accel −0.17 (stable across folds, std ≤ 0.03).
 
 ### Failure analysis (logistic, ±2)
-- **Serves are nearly undetected:** recall 0.126 (serve) / 0.082 (flick serve); the shuttle
+- **Serves are nearly undetected:** recall 0.133 (serve) / 0.082 (flick serve); the shuttle
   starts from rest and is visible on only 59 % of serve frames (dev matches). Recall excluding
-  serves: **0.768**. 875 of 3,212 misses are the first hit of a rally.
+  serves: **0.768**. 869 of 3,204 misses are the first hit of a rally.
 - **Timing:** 1,255 misses have a prediction 3–8 frames away. On the dev matches, every way of
   picking the frame (acceleration peak, wrist–shuttle closest approach, maximum turn, 1-frame
   acceleration) puts only 70–72 % of near-hit candidates within ±2 of the label. A video check
   of 3 disagreements found the label at contact in 2 (detector late on a smash, early on a drop)
   and the label ~4 frames late in 1 (net shot). Both sources err; with n = 3 this is anecdotal.
-- Other misses: 1,254 candidates scored below threshold (weak net shots / blocks: recall 0.71 /
-  0.63), 432 with the shuttle missing, 271 with no trajectory peak at all.
-- False positives: 1,885 mid-rally (largely the timing pairs above), 298 after the last hit
-  (shuttle landing), 190 duplicates, 152 at annotated bounces / net hits; 359 have a removed
+- Other misses: 1,249 candidates scored below threshold (weak net shots / blocks: recall 0.71 /
+  0.64), 432 with the shuttle missing, 268 with no trajectory peak at all.
+- False positives: 1,895 mid-rally (largely the timing pairs above), 297 after the last hit
+  (shuttle landing), 199 duplicates, 165 at annotated bounces / net hits; 365 have a removed
   shuttle outlier within ±3 frames.
-- Hitter side (nearest wrist) is correct for 81.0 % of detected hits.
-- Clean rallies F1 0.747 vs flagged rallies (suspect / < 50 % main camera / no serve) 0.688.
+- Hitter side (nearest wrist) is correct for 80.3 % of detected hits.
+- Clean rallies F1 0.746 vs flagged rallies (suspect / < 50 % main camera / no serve) 0.687.
 
 ### Limitations / next steps for hits
 - Every signal is derived from annotations (TrackNet shuttle, BFMD pose); errors there cap the
@@ -164,35 +164,35 @@ Features use the whole rally (offline analysis, not real-time).
 | model | 12 classes: accuracy | 12 classes: macro F1 [95 % CI] | 10 merged classes: macro F1 |
 |---|---|---|---|
 | majority | 0.254 | 0.034 | 0.041 |
-| logistic regression | 0.737 | 0.647 [0.601, 0.677] | 0.685 |
-| **hgb** | **0.792** | **0.710 [0.662, 0.738]** | **0.736** |
+| logistic regression | 0.736 | 0.646 [0.601, 0.676] | 0.685 |
+| **hgb** | **0.793** | **0.707 [0.661, 0.737]** | **0.733** |
 
 - CIs come from a match-level bootstrap (2,000 resamples of whole matches).
-- hgb − logreg = +0.048 to +0.082 macro F1 (paired CI), so the difference is robust.
-- Per-match macro F1 for hgb: 0.687 ± 0.075.
+- hgb − logreg = +0.043 to +0.083 macro F1 (paired CI), so the difference is robust.
+- Per-match macro F1 for hgb: 0.684 ± 0.076.
 - Merged scheme: serve + flick_serve → serve, and net_kill + press → net_attack.
 
 **Per class (hgb), F1:**
-- strong: serve 0.95, lift 0.89, net_shot 0.88, smash 0.85, clear 0.80, flick_serve 0.79;
-- weak: block 0.71, drop 0.69, net_kill 0.54, drive 0.52, push 0.47, press 0.43.
+- strong: serve 0.95, lift 0.90, net_shot 0.88, smash 0.84, clear 0.81, flick_serve 0.80;
+- weak: block 0.70, drop 0.69, drive 0.52, net_kill 0.50, push 0.49, press 0.42.
 
 **Main confusions** (row-normalised), between strokes that look alike:
-- press → drive 0.26, drive → block 0.19, push → lift 0.18, drop → smash 0.14.
+- press → drive 0.26, drive → block 0.19, push → lift 0.17, drop → smash 0.14.
 
 **Feature groups** (hgb, 120 iterations, macro F1):
 | setting | macro F1 |
 |---|---|
-| all features | 0.710 |
+| all features | 0.706 |
 | only context | 0.554 |
 | only position | 0.538 |
-| only shuttle | 0.527 |
+| only shuttle | 0.536 |
 | only pose | 0.344 |
-| all minus context | 0.662 |
+| all minus context | 0.657 |
 | all minus shuttle | 0.672 |
-| all minus position | 0.680 |
-| all minus pose | 0.701 |
+| all minus position | 0.677 |
+| all minus pose | 0.702 |
 
-Every group adds something. Pose contributes least (−0.009); the 2D skeleton at one frame
+Every group adds something. Pose contributes least (−0.004); the 2D skeleton at one frame
 says little beyond where the shuttle goes.
 
 ### Players: generalisation caveat
@@ -203,24 +203,24 @@ that match is held out:
 
 | hitter in training? | hits | accuracy | macro F1 |
 |---|---|---|---|
-| seen | 9,772 | 0.791 | 0.705 |
-| unseen | 1,529 | 0.793 | 0.723 |
+| seen | 9,772 | 0.793 | 0.704 |
+| unseen | 1,529 | 0.792 | 0.713 |
 
 - No drop for unseen players here, but this is **3 players, 1,529 hits**, all against seen
   opponents, from the same 4 tournaments and broadcast style. That is weak evidence, not proof
   of generalisation to new players.
-- Per player, accuracy ranges from 0.653 (Wang Zheng Xing; his 2 matches are the China Open
-  ones with the most camera problems) to 0.846 (Li Shi Feng).
-- Clean rallies: macro F1 0.746. Flagged rallies (suspect / < 50 % main camera / no serve):
-  0.526. The flagged set includes the 139 rallies whose first annotated hit is not a serve,
+- Per player, accuracy ranges from 0.661 (Wang Zheng Xing; his 2 matches are the China Open
+  ones with the most camera problems) to 0.855 (Li Shi Feng).
+- Clean rallies: macro F1 0.741. Flagged rallies (suspect / < 50 % main camera / no serve):
+  0.534. The flagged set includes the 139 rallies whose first annotated hit is not a serve,
   where the "first hit" context feature misleads.
 
 ### End-to-end (classify Task 2 detections, ±2)
 | | value |
 |---|---|
-| detections / annotated hits / matched | 10,505 / 11,301 / 8,024 |
-| accuracy on matched detections (macro F1) | 0.678 (0.535) |
-| annotated hits detected **and** correctly classified | 0.482 |
+| detections / annotated hits / matched | 10,546 / 11,301 / 8,032 |
+| accuracy on matched detections (macro F1) | 0.681 (0.539) |
+| annotated hits detected **and** correctly classified | 0.484 |
 | detections that are a real hit of the correct class | 0.518 |
 
 Detection errors propagate: a missed or 3-frame-off hit also corrupts the neighbours' context
@@ -299,18 +299,114 @@ Full table: `outputs/task4/report.md`.
 
 ---
 
+## Task 5: TrackNetV3 on raw video — status: done (local run + Colab notebook)
+
+```bash
+uv run python -m badminton_analysis task5-clip --match Wang-Zheng-Xing-CHN-F --video <match.mp4> --out clip.mp4
+# TrackNetV3 (see the settings below) -> clip_ball.csv
+uv run python -m badminton_analysis task5-eval --match Wang-Zheng-Xing-CHN-F --pred clip_ball.csv \
+    --clip-start 14339 --video <match.mp4>          # -> outputs/task5/{report.md, metrics.json, overlay_*.jpg}
+```
+
+**Caveat:** BFMD's shuttle track is itself TrackNet output (unspecified version), so this
+measures **agreement between two trackers, not accuracy**. Where they disagree, either can be wrong.
+
+### Result: China Open 2025 F, 50 s clip (video frames 14339–15847, 3 rallies)
+| | value |
+|---|---|
+| clip frames / inside annotated rallies | 1,508 / 630 |
+| both see the shuttle / only BFMD / only TrackNetV3 | 556 / 52 / 22 |
+| visibility agreement | 0.883 |
+| position difference where both see it: median / mean / p90 | **2.2 px** / 39.0 / 101.7 |
+| within 2 / 5 / 10 / 20 px | 0.437 / **0.730** / 0.795 / 0.842 |
+| frame-alignment check: median px at BFMD shift −1 / 0 / +1 | 10.5 / **2.2** / 11.1 |
+
+- **Frame alignment is exact:** shifting BFMD by one frame either way multiplies the median by ~5.
+- **Two populations:** most frames agree within a few pixels (the median of 2.2 px is about one
+  heatmap cell of TrackNetV3, which works at 512 × 288 and truncates to integers); the 16 % beyond
+  20 px are runs of tens of frames where one tracker follows something else, hence the mean of 39 px.
+- **What the disagreement runs are** (frames checked by eye on overlays):
+  - 15448 (28 frames): a **close-up camera shot at the serve** inside the annotated rally window.
+    Neither tracker can be right (the shuttle is in the server's hand). BFMD's per-frame court
+    flag still says main camera here, so that flag misses some camera cuts.
+  - 14929 (17 frames): BFMD at the top edge of the image (a high lift leaving the frame),
+    TrackNetV3 on the far player's shoe.
+  - 15676 (6 frames): TrackNetV3 on a white streak at the near player's racket (the shuttle);
+    **BFMD on the far player's white shoes**.
+  - 14825–14828: BFMD on the far player's head, TrackNetV3 on his chest; no shuttle clearly visible.
+- So the failures go both ways; white shoes and other small white objects fool both trackers.
+
+### Found on the way: BFMD shuttle coordinates were read 5.12 px off (fixed)
+BFMD's README says shuttle centre = `(x + width/2, y + height/2)`. That is wrong for this data:
+- every shuttle box in all 12 matches is the same dummy size (0.8 % × 1.4222 % = 10.24 × 10.24 px);
+- on the video, the stored **(x, y) corner sits on the shuttle** in 11 of 12 evenly spaced
+  frames checked at 10× zoom, and the README "centre" lies 5.12 px down-right of it;
+- TrackNetV3 (which outputs the blob centre) agrees with (x, y): before the fix the median offset
+  was exactly −6.12 px in both axes with scale 1.000 (5.12 + ~1 px of integer truncation).
+
+`raw.load_shuttle` now uses (x, y) (schema version 5). Effect on Milestone 1 after a full re-run
+(Tasks 2–3 numbers in this report are the corrected ones): hit F1 @±2 0.7367 → **0.7362**, shot
+macro F1 0.7096 → **0.7062**, Task 4 unchanged. A constant offset doesn't change shuttle speed or
+turning, only the wrist–shuttle distance features, so the change is small and inside the CIs.
+
+**TrackNetV3 facts (verified from the code):**
+| item | value |
+|---|---|
+| repo | qaz812345/TrackNetV3, commit `6eda442` |
+| licence | MIT, explicitly covering the checkpoints |
+| checkpoint | `TrackNetV3_ckpts.zip`, Google Drive ID `1CfzE87a0f6LhBp0kniSl1-89zaLCZ8cA`, 126 MB, SHA-256 `8de68d34ea2457e368e22947f1309143d60a6a7f9ddccd31cd526d4c4571bcc4` |
+| zip contents | `ckpts/TrackNet_best.pt` (136 MB), `ckpts/InpaintNet_best.pt` (6 MB) |
+| output | `<clip>_ball.csv` with columns `Frame, Visibility, X, Y` |
+
+**Changes needed for current PyTorch / Python** (found by running it with torch 2.14 on the
+local GPU):
+1. `requirements.txt` pins torch 1.10, numpy 1.22 and opencv 4.4, which don't install on current
+   Python. Use the current libraries instead; inference imports fine with them.
+2. `test.py` (imported by `predict.py`) needs **`pycocotools`**, which is missing from
+   `requirements.txt`; `parse` is needed too.
+3. Use `--large_video`: without it, `predict.py` loads the whole clip into RAM (≈ 4 GB for 50 s
+   of 720p).
+4. Use **`--max_sample_num 300`**: the default of 1,800 frames for the background median was
+   **killed for running out of memory (exit 137 at 5.8 GB)** on this machine.
+5. `torch.load` works unchanged on torch 2.14 (default `weights_only=True`): the checkpoints load
+   and inference runs; no patch needed.
+6. Speed: 8 min 34 s for the 1,508-frame clip on an RTX 3050 laptop GPU (≈ 3 frames/s); InpaintNet
+   takes under a second. The bottleneck is CPU frame loading: `predict.py` starts `batch_size`
+   (16) DataLoader workers regardless of the CPU count (4 here, warning printed).
+
+Full command used:
+```bash
+uv run --project <repo> --with parse --with pycocotools python predict.py --video_file clip.mp4 \
+    --tracknet_file ckpts/TrackNet_best.pt --inpaintnet_file ckpts/InpaintNet_best.pt \
+    --save_dir pred_out --large_video --max_sample_num 300
+```
+
+### Colab notebook: `notebooks/colab_task5_tracknetv3.ipynb` (T4 GPU)
+Runs the steps above end to end: clones this repo and TrackNetV3 at `6eda442`, copies only this
+match's BFMD files from Drive, downloads the checkpoints once with `gdown` (cached in
+`My Drive/badminton/task5/`, SHA-256 checked), cuts the clip, runs `predict.py` with the flags
+above, runs `task5-eval` (results in `My Drive/badminton/outputs/task5/`), and checks the metrics
+against the local run with tolerances.
+
+**Tested** by executing every cell with `nbclient` against a copy of the Drive layout (fresh
+GitHub clone, real checkpoint download, local GPU): 615 s in total, clip identical (start
+14339, 1,508 frames), predictions **byte-identical** to the local run, so all metrics in the
+table above are reproduced exactly. Not yet run on a Colab T4 itself; there a different PyTorch /
+OpenCV build may move a few frames, which the tolerance check reports.
+
 ## Milestone 1: how to reproduce
 
 ```bash
 uv sync
 uv run python -m badminton_analysis all     # build, validate, viz-samples, task2, task3, task4 (~8 min, CPU)
-uv run pytest                               # 63 tests
+uv run pytest                               # 68 tests
 ```
 
 - **Colab:** `notebooks/colab_milestone1.ipynb` with `configs/colab.yaml` (same settings,
   different paths).
 - **Clean-checkout reproducibility:** running only the committed files with a fresh cache gave
-  identical numbers (hit F1 0.736737, shot macro F1 0.709614).
+  identical numbers (hit F1 0.736737, shot macro F1 0.709614), before the shuttle-coordinate fix
+  (Task 5). After the fix, a full re-run gives hit F1 0.736158, shot macro F1 0.706158.
 
 ## Overall limitations
 - **Data:** 12 matches, 9 players and 4 tournaments, all from BWF broadcasts. Every signal comes

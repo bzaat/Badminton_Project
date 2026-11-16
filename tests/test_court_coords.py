@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from badminton_analysis.coords import box_iou, normalized_to_px, percent_box_center, percent_box_to_xyxy
+from badminton_analysis.coords import box_iou, normalized_to_px, percent_box_center, percent_box_to_xyxy, percent_point
 from badminton_analysis.court import (
     CourtCalibration,
     CourtModel,
@@ -19,11 +19,15 @@ def test_percent_box_to_xyxy():
     np.testing.assert_allclose(b, [640, 360, 768, 504])
 
 
-def test_percent_box_center_matches_bfmd_formula():
-    # BFMD README: centre = (x + w/2, y + h/2) in percent
+def test_percent_box_center():
     x, y, w, h = 67.8125, 31.3889, 0.8, 1.4222
     c = percent_box_center(x, y, w, h, W, H)
     np.testing.assert_allclose(c, [(x + w / 2) * W / 100, (y + h / 2) * H / 100])
+
+
+def test_percent_point():
+    # BFMD shuttle: the (x, y) corner is the shuttle (checked on video), not the README's centre
+    np.testing.assert_allclose(percent_point(67.8125, 31.3889, W, H), [868.0, 226.0], atol=0.01)
 
 
 def test_normalized_to_px_keeps_scores():
