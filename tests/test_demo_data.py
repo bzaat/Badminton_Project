@@ -2,7 +2,8 @@
 import numpy as np
 import pandas as pd
 
-from badminton_analysis.demo_data import load_outputs, rally_hits, rally_label, rally_tracks, shuttle_speed
+from badminton_analysis.demo_data import (MOVEMENT_COLUMNS, load_outputs, rally_hits, rally_label, rally_tracks,
+                                          results_summary, short_match_name, shuttle_speed)
 
 from . import synthetic_bfmd as syn
 from .test_build_synthetic import cfg, md, truth  # noqa: F401  (pytest fixtures)
@@ -45,3 +46,27 @@ def test_tracks_speed_and_label(md):  # noqa: F811
 def test_load_outputs_missing_dir(tmp_path):
     o = load_outputs(tmp_path)
     assert all(v is None for v in o.values())
+    assert results_summary(o) is None
+
+
+def test_results_summary_shapes_and_per_class_f1():
+    cm = [[8, 2], [1, 9]]                       # rows annotated, columns predicted
+    t2 = {"variants": {"logistic": {
+        "micro": {"2": {"precision": 0.8, "recall": 0.7, "f1": 0.75, "tp": 7, "fp": 2, "fn": 3}},
+        "per_match": {"M": {"tol2": {"f1": 0.75, "tp": 7, "fp": 2, "fn": 3, "precision": 0.8}}}}}}
+    t3 = {"schemes": {"fine": {"classes": ["a", "b"], "models": {"hgb": {"accuracy": 0.85, "macro_f1": 0.849}}}},
+          "bootstrap_fine": {"hgb": {"macro_f1": [0.8, 0.9]}}, "confusion_fine": cm}
+    mv = pd.DataFrame([{**{c: 1.0 for c in MOVEMENT_COLUMNS}, "match": "M", "player": "P", "zone_front_left": 0.2,
+                        "extra_column": 5}])
+    s = results_summary({"t2_metrics": t2, "t3_metrics": t3, "t4_summary": mv})
+    assert s["hit"]["per_match"]["M"] == {"f1": 0.75, "tp": 7, "fp": 2, "fn": 3}
+    # class a: precision 8/9, recall 8/10 -> F1 = 2*8/(9+10)
+    assert abs(s["shot"]["per_class_f1"]["a"] - 16 / 19) < 1e-4
+    row = s["movement"][0]
+    assert row["zone_front_left"] == 0.2 and "extra_column" not in row      # only the listed columns
+
+
+def test_short_match_name():
+    assert short_match_name("VICTOR-China-Open-2025-Shi-Yu-Qi-CHN-3-vs.-Wang-Zheng-Xing-CHN-F") == \
+        "China Open 2025 F: Shi Yu Qi vs Wang Zheng Xing"
+    assert short_match_name("odd-name") == "odd-name"
