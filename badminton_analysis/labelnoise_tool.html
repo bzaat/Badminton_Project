@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contact Frame Labelling</title>
+<style>
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #d9d9d4;
+  --accent: #1f6feb; --ok: #1a7f37; --warn: #9a6700; --sel: #1f6feb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615; --panel: #1f1f1d; --ink: #ecece8; --muted: #a0a09a; --line: #3a3a36;
+    --accent: #58a6ff; --ok: #3fb950; --warn: #d29922; --sel: #58a6ff;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, sans-serif; }
+header { display: flex; gap: 16px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+.progress { color: var(--muted); }
+.bar { flex: 1; min-width: 120px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.bar > div { height: 100%; background: var(--ok); width: 0; }
+main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+.viewer { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.imgwrap { display: flex; justify-content: center; background: #000; border-radius: 6px; overflow: hidden; }
+.imgwrap img { max-width: 100%; max-height: 62vh; image-rendering: auto; display: block; }
+.info { display: flex; gap: 14px; align-items: center; margin: 10px 0 6px; flex-wrap: wrap; }
+.frameno { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 16px; }
+.strip { display: grid; grid-template-columns: repeat(25, minmax(0, 1fr)); gap: 3px; margin-top: 8px; }
+.strip button { padding: 0; border: 2px solid transparent; border-radius: 3px; background: none; cursor: pointer; position: relative; }
+.strip img { width: 100%; display: block; border-radius: 2px; }
+.strip button.cur { border-color: var(--muted); }
+.strip button.mark { border-color: var(--sel); }
+.strip button span { position: absolute; left: 2px; top: 0; font-size: 10px; color: #fff; text-shadow: 0 0 2px #000; }
+input[type=range] { width: 100%; }
+aside { display: flex; flex-direction: column; gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+.card h2 { font-size: 13px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+button.btn { font: inherit; padding: 6px 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 6px; cursor: pointer; }
+button.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.btn.on { outline: 2px solid var(--sel); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
+.status { font-weight: 600; }
+.status.done { color: var(--ok); }
+.status.todo { color: var(--warn); }
+kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--bg); }
+ul.keys { margin: 0; padding-left: 18px; color: var(--muted); }
+.muted { color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Contact frame labelling</h1>
+  <span class="progress" id="progress"></span>
+  <div class="bar"><div id="barfill"></div></div>
+  <button class="btn" id="prevItem">&larr; Prev item</button>
+  <button class="btn" id="nextTodo">Next unlabelled &rarr;</button>
+</header>
+<main>
+  <section class="viewer">
+    <div class="imgwrap"><img id="big" alt="current frame"></div>
+    <div class="info">
+      <span class="frameno" id="frameno"></span>
+      <span>Hitter: <b id="side"></b> player</span>
+      <span>View: <b id="viewname"></b></span>
+      <span class="status" id="itemstatus"></span>
+    </div>
+    <input type="range" id="slider" min="0" max="24" value="12">
+    <div class="strip" id="strip"></div>
+  </section>
+  <aside>
+    <div class="card">
+      <h2>This item</h2>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn primary" id="mark">Mark contact (Enter)</button>
+      </div>
+      <div class="row" style="margin-bottom:8px">
+        <button class="btn" id="sure">Sure (1)</button>
+        <button class="btn" id="approx">Approx. (2)</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="nohit">No hit / can't tell (N)</button>
+        <button class="btn" id="outside">Contact outside window (O)</button>
+        <button class="btn" id="clear">Clear</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Rule</h2>
+      <p style="margin:0 0 6px">Mark the frame where the racket strings touch the shuttle. If contact falls
+      between two frames, mark the <b>last frame before the shuttle leaves</b> the racket in its new direction.
+      Use <b>Approx.</b> when motion blur or occlusion hides the exact frame.</p>
+      <p style="margin:0 0 6px">If the crop doesn't show the hitter (e.g. a side camera), press <b>F</b> for the full frame.
+      If the hit isn't visible at all (close-up, replay, out of shot), press <b>N</b>.</p>
+      <p class="muted" style="margin:0">The frame you open on is random; it says nothing about where contact is.</p>
+    </div>
+    <div class="card">
+      <h2>Keys</h2>
+      <ul class="keys">
+        <li><kbd>&larr;</kbd> <kbd>&rarr;</kbd> step one frame</li>
+        <li><kbd>Space</kbd> play / pause (loop)</li>
+        <li><kbd>F</kbd> toggle crop / full frame</li>
+        <li><kbd>Enter</kbd> mark contact, <kbd>1</kbd> sure, <kbd>2</kbd> approx.</li>
+        <li><kbd>N</kbd> no hit, <kbd>O</kbd> outside window</li>
+        <li><kbd>&darr;</kbd> next unlabelled, <kbd>&uarr;</kbd> previous item</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h2>Save</h2>
+      <p class="muted" style="margin:0 0 8px">Autosaved in this browser. Download the file when done (or to back up).</p>
+      <div class="row">
+        <button class="btn primary" id="download">Download results</button>
+        <label class="btn" style="display:inline-block">Load file<input type="file" id="load" accept=".json" hidden></label>
+      </div>
+    </div>
+  </aside>
+</main>
+<script src="manifest.js"></script>
+<script>
+(function () {
+  const M = window.MANIFEST || [], KIT = window.KIT || {};
+  const STORE = "labelnoise:" + (KIT.match || "kit") + ":" + (KIT.seed ?? "");
+  let labels = {};
+  try { labels = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) { labels = {}; }
+  let cur = 0, fi = 12, view = "c", timer = null;
+  const $ = (id) => document.getElementById(id);
+  const pad = (j) => String(j).padStart(2, "0");
+  const src = (it, j, v) => `frames/${it.id}/${v}${pad(j)}.jpg`;
+
+  function save() { try { localStorage.setItem(STORE, JSON.stringify(labels)); } catch (e) {} }
+  function done(id) { const l = labels[id]; return l && (l.status !== "contact" || l.confidence); }
+
+  function showItem(i) {
+    cur = (i + M.length) % M.length; stop();
+    const it = M[cur], l = labels[it.id];
+    fi = l && Number.isInteger(l.frame) ? l.frame : Math.floor(it.n / 2);
+    view = it.view || "c";
+    $("slider").max = it.n - 1;
+    $("side").textContent = it.side;
+    const s = $("strip"); s.innerHTML = "";
+    s.style.gridTemplateColumns = `repeat(${it.n}, minmax(0, 1fr))`;
+    for (let j = 0; j < it.n; j++) {
+      const b = document.createElement("button");
+      b.innerHTML = `<img loading="lazy" src="${src(it, j, view)}" alt=""><span>${j + 1}</span>`;
+      b.onclick = () => setFrame(j);
+      s.appendChild(b);
+    }
+    for (let j = 0; j < it.n; j++) { const im = new Image(); im.src = src(it, j, view); }
+    render();
+  }
+  function setFrame(j) { fi = Math.max(0, Math.min(M[cur].n - 1, j)); render(); }
+  function render() {
+    const it = M[cur], l = labels[it.id];
+    $("big").src = src(it, fi, view);
+    $("slider").value = fi;
+    $("frameno").textContent = `Frame ${fi + 1} / ${it.n}`;
+    $("viewname").textContent = view === "c" ? "crop" : "full frame";
+    [...$("strip").children].forEach((b, j) => {
+      b.classList.toggle("cur", j === fi);
+      b.classList.toggle("mark", !!(l && l.status === "contact" && l.frame === j));
+    });
+    let txt = "Not labelled", cls = "todo";
+    if (l) {
+      if (l.status === "contact") txt = `Contact at frame ${l.frame + 1}` + (l.confidence ? ` (${l.confidence})` : " - choose sure / approx.");
+      else txt = l.status === "no_hit" ? "No hit / can't tell" : "Contact outside window";
+      cls = done(it.id) ? "done" : "todo";
+    }
+    $("itemstatus").textContent = txt; $("itemstatus").className = "status " + cls;
+    $("sure").classList.toggle("on", !!(l && l.confidence === "sure"));
+    $("approx").classList.toggle("on", !!(l && l.confidence === "approx"));
+    const n = M.filter((m) => done(m.id)).length;
+    $("progress").textContent = `Item ${cur + 1} of ${M.length} - ${n} labelled`;
+    $("barfill").style.width = (100 * n / Math.max(1, M.length)) + "%";
+  }
+  function setLabel(patch) {
+    const id = M[cur].id;
+    labels[id] = Object.assign({}, labels[id] || {}, patch, { t: new Date().toISOString() });
+    save(); render();
+  }
+  function mark() { setLabel({ status: "contact", frame: fi }); }
+  function conf(c) {
+    const l = labels[M[cur].id];
+    if (!l || l.status !== "contact") setLabel({ status: "contact", frame: fi, confidence: c });
+    else setLabel({ confidence: c });
+    if (done(M[cur].id)) setTimeout(nextTodo, 250);
+  }
+  function other(status) { setLabel({ status, frame: null, confidence: null }); setTimeout(nextTodo, 250); }
+  function nextTodo() {
+    for (let k = 1; k <= M.length; k++) { const j = (cur + k) % M.length; if (!done(M[j].id)) return showItem(j); }
+    showItem(cur + 1);
+  }
+  function play() {
+    if (timer) return stop();
+    timer = setInterval(() => setFrame((fi + 1) % M[cur].n), 1000 / 8);
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+  $("slider").oninput = (e) => setFrame(+e.target.value);
+  $("mark").onclick = mark;
+  $("sure").onclick = () => conf("sure");
+  $("approx").onclick = () => conf("approx");
+  $("nohit").onclick = () => other("no_hit");
+  $("outside").onclick = () => other("outside_window");
+  $("clear").onclick = () => { delete labels[M[cur].id]; save(); render(); };
+  $("prevItem").onclick = () => showItem(cur - 1);
+  $("nextTodo").onclick = nextTodo;
+  $("download").onclick = () => {
+    const blob = new Blob([JSON.stringify({ kit: KIT, saved: new Date().toISOString(), labels }, null, 1)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "labelnoise_results.json"; a.click();
+  };
+  $("load").onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try { labels = JSON.parse(await f.text()).labels || {}; save(); showItem(cur); } catch (err) { alert("Could not read that file."); }
+  };
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT") return;
+    const k = e.key;
+    if (k === "ArrowLeft") { stop(); setFrame(fi - 1); }
+    else if (k === "ArrowRight") { stop(); setFrame(fi + 1); }
+    else if (k === " ") play();
+    else if (k === "Enter") mark();
+    else if (k === "1") conf("sure");
+    else if (k === "2") conf("approx");
+    else if (k === "n" || k === "N") other("no_hit");
+    else if (k === "o" || k === "O") other("outside_window");
+    else if (k === "f" || k === "F") {
+      view = view === "c" ? "f" : "c";
+      [...$("strip").children].forEach((b, j) => { b.querySelector("img").src = src(M[cur], j, view); });
+      render();
+    }
+    else if (k === "ArrowDown") nextTodo();
+    else if (k === "ArrowUp") showItem(cur - 1);
+    else return;
+    e.preventDefault();
+  });
+  if (!M.length) { document.body.innerHTML = "<p style='padding:20px'>manifest.js not found next to this page.</p>"; return; }
+  const firstTodo = M.findIndex((m) => !done(m.id));
+  showItem(firstTodo < 0 ? 0 : firstTodo);
+})();
+</script>
+</body>
+</html>
