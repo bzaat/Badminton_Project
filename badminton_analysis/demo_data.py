@@ -80,6 +80,62 @@ def shuttle_speed(px: np.ndarray) -> np.ndarray:
     return np.r_[np.nan, v]
 
 
+MOVEMENT_COLUMNS = ["match", "player", "rallies", "distance_m", "distance_per_min_m",
+                    "median_rally_mean_speed_mps", "median_rally_p95_speed_mps",
+                    "recovery_depth_median_m", "recovery_lateral_median_m"]
+
+
+def results_summary(outs: dict) -> dict | None:
+    """Aggregate results only (what REPORT.md already publishes): no frame-level data.
+
+    This is what the public demo ships in demo/public_results.json, so the app can show the
+    results without the BFMD package. Returns None when the Task 2/3 outputs are missing.
+    """
+    t2, t3 = outs.get("t2_metrics"), outs.get("t3_metrics")
+    if t2 is None or t3 is None:
+        return None
+    lg = t2["variants"]["logistic"]
+    fine = t3["schemes"]["fine"]
+    cm = np.asarray(t3["confusion_fine"], float)
+    tp = np.diag(cm)
+    prec = np.divide(tp, cm.sum(axis=0), out=np.zeros_like(tp), where=cm.sum(axis=0) > 0)
+    rec = np.divide(tp, cm.sum(axis=1), out=np.zeros_like(tp), where=cm.sum(axis=1) > 0)
+    f1 = np.divide(2 * prec * rec, prec + rec, out=np.zeros_like(tp), where=(prec + rec) > 0)
+    mv = outs.get("t4_summary")
+    zones = [c for c in mv.columns if c.startswith("zone_")] if mv is not None else []
+    return {
+        "source": "outputs of `python -m badminton_analysis all`; numbers as in REPORT.md",
+        "hit": {
+            "micro": {k: {m: v[m] for m in ("precision", "recall", "f1", "tp", "fp", "fn")} for k, v in lg["micro"].items()},
+            "per_match": {m: {k: v["tol2"][k] for k in ("f1", "tp", "fp", "fn")} for m, v in lg["per_match"].items()},
+        },
+        "shot": {
+            "classes": fine["classes"],
+            "models": {k: {"accuracy": v["accuracy"], "macro_f1": v["macro_f1"]} for k, v in fine["models"].items()},
+            "macro_f1_ci_hgb": t3["bootstrap_fine"]["hgb"]["macro_f1"],
+            "confusion": cm.astype(int).tolist(),
+            "per_class_f1": dict(zip(fine["classes"], np.round(f1, 4).tolist())),
+        },
+        "movement": [] if mv is None else mv[MOVEMENT_COLUMNS + zones].round(4).to_dict(orient="records"),
+    }
+
+
+def short_match_name(m: str) -> str:
+    """'VICTOR-China-Open-2025-Shi-Yu-Qi-CHN-3-vs.-Wang-Zheng-Xing-CHN-F' -> 'China Open 2025 F: Shi Yu Qi vs Wang Zheng Xing'."""
+    parts = m.split("-")
+    try:
+        y = next(i for i, p in enumerate(parts) if p.isdigit() and len(p) == 4)
+        a, b = "-".join(parts[y + 1:]).split("-vs.-")
+    except (StopIteration, ValueError):
+        return m
+
+    def clean(s: str) -> str:   # drop country codes (CHN) and seeds (3)
+        return " ".join(w for w in s.split("-") if not (w.isupper() and len(w) == 3) and not w.isdigit())
+
+    rnd = b.rsplit("-", 1)[-1]
+    return f"{' '.join(parts[1:y])} {parts[y]} {rnd}: {clean(a)} vs {clean(b.rsplit('-', 1)[0])}"
+
+
 def rally_label(r: dict) -> str:
     flags = []
     if r.get("suspect"):

@@ -2,12 +2,17 @@
 
     uv run --group demo streamlit run demo/app.py
 
-Needs the BFMD package (configs/default.yaml or BFMD_ROOT) and the Milestone 1 outputs
-(`python -m badminton_analysis all`). The match video is optional: with it, the rally replay shows
-real frames; without it, the same annotations are drawn on a blank court.
+Full mode (local): needs the BFMD package (configs/default.yaml or BFMD_ROOT) and the Milestone 1
+outputs (`python -m badminton_analysis all`). The match video is optional: with it, the rally
+replay shows real frames; without it, the same annotations are drawn on a blank court.
+
+Public mode (e.g. Streamlit Community Cloud, no BFMD data): shows the held-out results and
+per-match movement summaries from demo/public_results.json, which holds aggregate numbers only
+(no frame-level BFMD data). Regenerate it with `python demo/export_public.py`.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -21,11 +26,13 @@ from badminton_analysis.build import load_match, singles_matches  # noqa: E402
 from badminton_analysis.config import load_config  # noqa: E402
 from badminton_analysis.court import CourtModel  # noqa: E402
 from badminton_analysis.demo_data import (load_outputs, rally_hits, rally_label,  # noqa: E402
-                                          rally_tracks, shuttle_speed)
+                                          rally_tracks, results_summary, short_match_name,
+                                          shuttle_speed)
 from badminton_analysis.viz import draw_frame_overlay, read_frames  # noqa: E402
 
 TOP_C, BOTTOM_C, HIT_C, DET_C, FP_C = "#e8710a", "#c5221f", "#1a7f37", "#1f6feb", "#8250df"
 VIDEO_DIRS = [Path("/mnt/d/badminton/videos"), Path("D:/badminton/videos")]
+PUBLIC_RESULTS = Path(__file__).with_name("public_results.json")
 
 st.set_page_config(page_title="Badminton Analytics", page_icon="🏸", layout="wide")
 
@@ -47,21 +54,14 @@ def _outputs():
 
 @st.cache_data
 def _matches() -> list[str]:
-    return singles_matches(_cfg())
-
-
-def _short(m: str) -> str:
-    """'VICTOR-China-Open-2025-Shi-Yu-Qi-CHN-3-vs.-Wang-Zheng-Xing-CHN-F' -> 'China Open 2025 F: Shi Yu Qi vs Wang Zheng Xing'."""
-    parts = m.split("-")
+    """Singles matches in the local BFMD package; [] when it isn't there (public mode)."""
     try:
-        y = next(i for i, p in enumerate(parts) if p.isdigit() and len(p) == 4)
-        event = " ".join(parts[1:y]).replace("Open", "Open")
-        a, b = "-".join(parts[y + 1:]).split("-vs.-")
-        clean = lambda s: " ".join(w for w in s.split("-") if not (w.isupper() and len(w) == 3) and not w.isdigit())
-        rnd = b.split("-")[-1]
-        return f"{event} {parts[y]} {rnd}: {clean(a)} vs {clean(b.rsplit('-', 1)[0])}"
-    except (StopIteration, ValueError):
-        return m
+        return singles_matches(_cfg())
+    except Exception:  # noqa: BLE001  (missing folder, unreadable files)
+        return []
+
+
+_short = short_match_name
 
 
 def _video_for(match: str) -> Path | None:
@@ -138,18 +138,119 @@ def _timeline(tr: dict, hits: pd.DataFrame, fps: list[int], frame: int) -> go.Fi
     return fig
 
 
+def _movement_tab(match: str, summary: dict | None, outs: dict) -> None:
+    rows = [r for r in (summary or {}).get("movement", []) if r["match"] == match]
+    if not rows:
+        st.info("No movement summary for this match. Run `python -m badminton_analysis task4`.")
+        return
+    cols = st.columns(len(rows))
+    for col, row in zip(cols, rows):
+        col.subheader(row["player"])
+        col.metric("Distance", f"{row['distance_m'] / 1000:.2f} km")
+        col.metric("Per minute of rally play", f"{row['distance_per_min_m']:.0f} m")
+        col.metric("Median rally mean speed", f"{row['median_rally_mean_speed_mps']:.2f} m/s")
+        col.metric("Recovery position (median)", f"{row['recovery_depth_median_m']:.1f} m from net")
+    rr = outs.get("t4_rally")
+    if rr is not None:                                    # per-rally detail: full mode only
+        mr = rr[rr["match"] == match].copy()
+        mr["rally label"] = "G" + mr["game"].astype(str) + " R" + (mr["rally"] + 1).astype(str)
+        fig = go.Figure()
+        for p, g in mr.groupby("player"):
+            fig.add_trace(go.Scatter(x=np.arange(len(g)), y=g["distance_m"], mode="lines+markers", name=p,
+                                     text=g["rally label"], hovertemplate="%{text}: %{y:.1f} m<extra>%{fullData.name}</extra>"))
+        fig.update_layout(height=320, xaxis_title="rally (in match order)", yaxis_title="distance per rally (m)",
+                          margin=dict(l=10, r=10, t=30, b=10))
+        st.plotly_chart(fig, width="stretch")
+    zones = [k for k in rows[0] if k.startswith("zone_")]
+    if zones:
+        z = pd.DataFrame({r["player"]: [r[k] for k in zones] for r in rows},
+                         index=[k.replace("zone_", "").replace("_", " ") for k in zones])
+        st.markdown("**Share of time per court zone** (each player's own half, front / mid / rear × left / centre / right)")
+        st.bar_chart(z)
+    st.caption("Measured from ankle keypoints on main-camera frames, 9-frame smoothing. Noise floor 0.08–0.10 m/s; "
+               "absolute distances are uncertain by about ±10–20%. The far side reads slightly faster (pixel density).")
+
+
+def _results_tab(match: str, summary: dict | None) -> None:
+    if summary is None:
+        st.info("Run `python -m badminton_analysis task2` and `task3` to create the result files.")
+        return
+    a, b = st.columns(2)
+    micro = summary["hit"]["micro"]["2"]
+    a.metric("Hit detection F1 @ ±2 (all 12 held-out matches)", f"{micro['f1']:.3f}",
+             help=f"precision {micro['precision']:.3f}, recall {micro['recall']:.3f}")
+    pm = summary["hit"]["per_match"].get(match)
+    if pm:
+        a.metric("This match, held out", f"{pm['f1']:.3f}", help=f"tp {pm['tp']}, fp {pm['fp']}, fn {pm['fn']}")
+    shot = summary["shot"]
+    hgb, ci = shot["models"]["hgb"], shot["macro_f1_ci_hgb"]
+    b.metric("Shot type macro F1, 12 classes", f"{hgb['macro_f1']:.3f}", help=f"95% CI {ci[0]:.3f}–{ci[1]:.3f}")
+    b.metric("Shot type accuracy", f"{hgb['accuracy']:.3f}")
+    tol = pd.DataFrame([{"tolerance": f"±{k} frames", **{m: v[m] for m in ("precision", "recall", "f1")}}
+                        for k, v in sorted(summary["hit"]["micro"].items(), key=lambda kv: int(kv[0]))])
+    st.markdown("**Hit detection at each tolerance** (30 fps: ±2 frames = 67 ms)")
+    st.dataframe(tol.round(3), hide_index=True, width="stretch")
+    cm = np.array(shot["confusion"], float)
+    cmn = cm / cm.sum(axis=1, keepdims=True)
+    heat = go.Figure(go.Heatmap(z=cmn, x=shot["classes"], y=shot["classes"], colorscale="Greens", zmin=0, zmax=1,
+                                text=cm.astype(int), hovertemplate="annotated %{y}<br>predicted %{x}<br>%{text} hits (%{z:.0%})<extra></extra>"))
+    heat.update_yaxes(autorange="reversed", title="annotated")
+    heat.update_xaxes(title="predicted")
+    heat.update_layout(height=520, margin=dict(l=10, r=10, t=30, b=10), title="Shot-type confusion (row-normalised, all held-out hits)")
+    st.plotly_chart(heat, width="stretch")
+    f1 = pd.Series(shot["per_class_f1"]).sort_values()
+    st.markdown("**Per-class F1** (gradient-boosted trees)")
+    st.bar_chart(f1, horizontal=True)
+
+
+ABOUT = """
+**What you are looking at.** Data from the BFMD dataset (12 BWF Super 1000 men's singles matches,
+2025). Player positions are in court metres via a homography; hits are the dataset's annotations;
+*detected* hits and *predicted* shot types come from models that never saw that match
+(leave-one-match-out).
+
+**How to read the rally timeline.** Hits show up as spikes in shuttle speed. Green diamonds are
+annotated hits, blue triangles are Task 2 detections matched to a hit within ±2 frames, purple
+crosses are detections that matched no hit.
+
+**Limits.** 12 matches, 9 players, one broadcast style. Inputs are annotations (TrackNet shuttle,
+BFMD pose), so their errors cap performance. All numbers: `REPORT.md` in the repository.
+"""
+
 # ------------------------------------------------------------------------------------------- #
 st.title("🏸 Badminton broadcast analytics")
 st.caption("Milestone 1 on BFMD: shot timing, shot types and player movement, evaluated leave-one-match-out. "
            "Code: [bzaat/Badminton_Project](https://github.com/bzaat/Badminton_Project)")
 
-try:
-    matches = _matches()
-except Exception as e:  # data missing
-    st.error(f"Could not find the BFMD package: {e}. Set BFMD_ROOT or edit configs/default.yaml.")
-    st.stop()
-outs = _outputs()
+matches = _matches()
+outs = _outputs() if matches else {}
+summary = results_summary(outs) if matches else None
+if summary is None and PUBLIC_RESULTS.exists():
+    summary = json.loads(PUBLIC_RESULTS.read_text())
 
+if not matches:
+    # ---------------- public mode: aggregate results only ---------------- #
+    st.info("**Public version.** This page shows the held-out results and per-match movement summaries. "
+            "The frame-by-frame rally replay needs the BFMD annotations and broadcast video, which are not "
+            "redistributed here; run the app locally with the dataset to use it "
+            "(`uv run --group demo streamlit run demo/app.py`).")
+    if summary is None:
+        st.error("No results found: demo/public_results.json is missing.")
+        st.stop()
+    names = sorted(summary["hit"]["per_match"], key=_short)
+    with st.sidebar:
+        st.header("Choose a match")
+        match = st.selectbox("Match", names, format_func=_short)
+    tab_models, tab_match, tab_about = st.tabs(["Model results", "Match movement", "About"])
+    with tab_models:
+        _results_tab(match, summary)
+    with tab_match:
+        _movement_tab(match, summary, {})
+    with tab_about:
+        st.markdown(ABOUT)
+    st.stop()
+
+# ---------------- full mode: local BFMD package ---------------- #
 with st.sidebar:
     st.header("Choose a rally")
     order = sorted(matches, key=lambda m: (_video_for(m) is None, _short(m)))
@@ -199,78 +300,13 @@ with tab_rally:
         st.image(_frame_image(match, frame, use_video), width="stretch",
                  caption="Annotations drawn on the frame: court lines, player boxes, pose, ground points (cyan), shuttle (yellow ring).")
     with c2:
-        st.plotly_chart(_court_figure(CourtModel.from_config(_cfg()["court"]), tr, frame, hits),
-                        width="stretch")
+        st.plotly_chart(_court_figure(CourtModel.from_config(_cfg()["court"]), tr, frame, hits), width="stretch")
     st.plotly_chart(_timeline(tr, hits, fps, frame), width="stretch")
     st.dataframe(hits.drop(columns=["shot correct"]), hide_index=True, width="stretch")
 
 with tab_match:
-    s, rr = outs["t4_summary"], outs["t4_rally"]
-    if s is None or rr is None:
-        st.info("Run `python -m badminton_analysis task4` to create the movement tables.")
-    else:
-        ms = s[s["match"] == match]
-        cols = st.columns(max(1, len(ms)))
-        for col, (_, row) in zip(cols, ms.iterrows()):
-            col.subheader(row["player"])
-            col.metric("Distance", f"{row['distance_m'] / 1000:.2f} km")
-            col.metric("Per minute of rally play", f"{row['distance_per_min_m']:.0f} m")
-            col.metric("Median rally mean speed", f"{row['median_rally_mean_speed_mps']:.2f} m/s")
-        mr = rr[rr["match"] == match].copy()
-        mr["rally label"] = "G" + mr["game"].astype(str) + " R" + (mr["rally"] + 1).astype(str)
-        fig = go.Figure()
-        for p, g in mr.groupby("player"):
-            fig.add_trace(go.Scatter(x=np.arange(len(g)), y=g["distance_m"], mode="lines+markers", name=p,
-                                     text=g["rally label"], hovertemplate="%{text}: %{y:.1f} m<extra>%{fullData.name}</extra>"))
-        fig.update_layout(height=320, xaxis_title="rally (in match order)", yaxis_title="distance per rally (m)",
-                          margin=dict(l=10, r=10, t=30, b=10))
-        st.plotly_chart(fig, width="stretch")
-        zones = [c for c in ms.columns if c.startswith("zone_")]
-        z = ms.set_index("player")[zones].T
-        z.index = [c.replace("zone_", "").replace("_", " ") for c in zones]
-        st.markdown("**Share of time per court zone** (each player's own half, front / mid / rear × left / centre / right)")
-        st.bar_chart(z)
-        st.caption("Measured from ankle keypoints on main-camera frames, 9-frame smoothing. Noise floor 0.08–0.10 m/s; "
-                   "absolute distances are uncertain by about ±10–20%. The far side reads slightly faster (pixel density).")
-
+    _movement_tab(match, summary, outs)
 with tab_models:
-    t2, t3 = outs["t2_metrics"], outs["t3_metrics"]
-    if t2 is None or t3 is None:
-        st.info("Run `python -m badminton_analysis task2` and `task3` to create the result files.")
-    else:
-        a, b = st.columns(2)
-        micro = t2["variants"]["logistic"]["micro"]["2"]
-        a.metric("Hit detection F1 @ ±2 (all 12 held-out matches)", f"{micro['f1']:.3f}",
-                 help=f"precision {micro['precision']:.3f}, recall {micro['recall']:.3f}")
-        pm = t2["variants"]["logistic"]["per_match"].get(match, {}).get("tol2")
-        if pm:
-            a.metric("This match, held out", f"{pm['f1']:.3f}", help=f"tp {pm['tp']}, fp {pm['fp']}, fn {pm['fn']}")
-        fine = t3["schemes"]["fine"]
-        hgb = fine["models"]["hgb"]
-        ci = t3["bootstrap_fine"]["hgb"]["macro_f1"]
-        b.metric("Shot type macro F1, 12 classes", f"{hgb['macro_f1']:.3f}", help=f"95% CI {ci[0]:.3f}–{ci[1]:.3f}")
-        b.metric("Shot type accuracy", f"{hgb['accuracy']:.3f}")
-        cm = np.array(t3["confusion_fine"], float)
-        cmn = cm / cm.sum(axis=1, keepdims=True)
-        heat = go.Figure(go.Heatmap(z=cmn, x=fine["classes"], y=fine["classes"], colorscale="Greens", zmin=0, zmax=1,
-                                    text=cm.astype(int), hovertemplate="annotated %{y}<br>predicted %{x}<br>%{text} hits (%{z:.0%})<extra></extra>"))
-        heat.update_yaxes(autorange="reversed", title="annotated")
-        heat.update_xaxes(title="predicted")
-        heat.update_layout(height=520, margin=dict(l=10, r=10, t=30, b=10), title="Shot-type confusion (row-normalised, all held-out hits)")
-        st.plotly_chart(heat, width="stretch")
-
+    _results_tab(match, summary)
 with tab_about:
-    st.markdown("""
-**What you are looking at.** Each rally comes from the BFMD dataset (12 BWF Super 1000 men's singles
-matches, 2025). Player positions are in court metres via a homography; hits are the dataset's
-annotations; *detected* hits and *predicted* shot types come from models that never saw this match
-(leave-one-match-out).
-
-**How to read the timeline.** Hits show up as spikes in shuttle speed. Green diamonds are annotated
-hits, blue triangles are Task 2 detections matched to a hit within ±2 frames, purple crosses are
-detections that matched no hit.
-
-**Limits.** 12 matches, 9 players, one broadcast style. Inputs are annotations (TrackNet shuttle,
-BFMD pose), so their errors cap performance. Video is only available here for one match.
-All numbers: `REPORT.md`.
-""")
+    st.markdown(ABOUT)
