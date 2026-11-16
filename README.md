@@ -2,6 +2,8 @@
 
 > **Status: work in progress.** The dataset loader and training script are in place, but no full training run or benchmark results have been published yet. Results will be added here once available.
 
+**Project showcase:** [bzaat.github.io/Badminton_Project](https://bzaat.github.io/Badminton_Project/): Milestone 1 (hit detection, shot types, movement, TrackNetV3 check) in three pages. Source in `docs/`; numbers from `REPORT.md`.
+
 Detect the **two players** and the **shuttlecock** in broadcast badminton footage with
 Faster R-CNN (MobileNetV3-Large FPN), trained on the
 [BFMD](https://openaccess.thecvf.com/content/CVPR2026W/CVsports/papers/Ding_BFMD_A_Full-Match_Badminton_Dense_Dataset_for_Dense_Shot_Captioning_CVPRW_2026_paper.pdf)

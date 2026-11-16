@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Badminton Analytics Architecture</title>
+<meta name="description" content="Pipeline architecture, evaluation design and validation chain of the badminton broadcast analytics project.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html">Badminton Analytics</a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="architecture.html" aria-current="page">Architecture</a></li>
+        <li><a href="impact.html">Results</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Architecture</h1>
+    <p class="lead">One validated data container feeds three analysis tasks; raw video is used to check the annotations independently.</p>
+  </section>
+
+  <section>
+    <h2>Pipeline</h2>
+    <pre class="mermaid">
+flowchart TD
+    RAW["BFMD JSON: shuttle track, COCO-17 pose,<br/>player boxes, hits, rallies, court"] --> ALIGN["Frame alignment<br/>player_bbox +1, shuttle 0, pose 0"]
+    ALIGN --> COURT["Court model + homography<br/>pixels to metres"]
+    COURT --> MD["MatchData, schema v5<br/>329,819 frames, 1,058 rallies, 11,301 hits"]
+    MD --> HIT["Task 2: hit detection<br/>logistic regression"]
+    MD --> MOVE["Task 4: movement in metres"]
+    HIT --> SHOT["Task 3: shot type<br/>gradient-boosted trees"]
+    VIDEO["Raw match video"] --> T5["Task 5: TrackNetV3"]
+    T5 -. cross-check .-> MD
+    VIDEO --> LN["Label-noise kit"]
+    LN -. timing check .-> HIT
+    </pre>
+  </section>
+
+  <section>
+    <h2>Evaluation design</h2>
+    <pre class="mermaid">
+flowchart LR
+    M["12 matches"] --> F{"for each match"}
+    F --> TR["11 training matches:<br/>thresholds, offsets, weights"]
+    F --> TE["1 held-out match: score only"]
+    TR --> TE
+    TE --> P["pool 12 held-out results"]
+    P --> CI["match-level bootstrap 95% CI"]
+    </pre>
+  </section>
+
+  <section>
+    <h2>Design decisions</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Decision</th><th>Evidence</th></tr></thead>
+        <tbody>
+          <tr><td>Player boxes shifted +1 frame</td><td>IoU with pose boxes 0.97–1.00 shifted vs 0.88–0.91 unshifted, 12/12 matches</td></tr>
+          <tr><td>Court corners are the doubles outer lines</td><td>Net-post bases project within 5 cm; singles hypothesis off by up to 47 cm</td></tr>
+          <tr><td>Ground point = ankles + 0.10 × box height</td><td>Fitted on 6 matches; server asymmetry 0.01 m on the other 6 (was 1.6 m)</td></tr>
+          <tr><td>Shuttle = box (x, y) corner, not the README's centre</td><td>TrackNetV3 on raw video: offset exactly −6.12 px before the fix, median 2.2 px after</td></tr>
+          <tr><td>Hyperparameters fixed in config</td><td>No tuning on test folds; model gap robust (paired CI +0.043 to +0.083 macro F1)</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Engineering</h2>
+    <ul class="tight">
+      <li>About 5,400 lines of Python; 73 pytest tests with a synthetic BFMD fixture plus real-data tests.</li>
+      <li>One command (<code>python -m badminton_analysis all</code>) rebuilds everything in about 8 minutes on CPU; build peak 0.6 GB RAM.</li>
+      <li>Config-driven (<code>configs/default.yaml</code>); schema-versioned caches rebuild themselves when the format changes.</li>
+      <li>Colab notebooks for the GPU steps, tested cell by cell with <code>nbclient</code>; TrackNetV3 pinned to a commit with a SHA-256-checked checkpoint.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Trade-offs</h2>
+    <ul class="tight">
+      <li><b>Offline features</b> use the whole rally: more accurate shot types, not real-time.</li>
+      <li><b>Annotations as inputs</b> for Milestone 1: fast iteration, but annotation errors cap performance until the detector replaces them.</li>
+      <li><b>Interpretable models</b> over end-to-end deep models: with 12 matches, measurable ablations mattered more than peak accuracy.</li>
+    </ul>
+  </section>
+</main>
+
+<footer><div class="wrap">All numbers from <code>REPORT.md</code> in <a href="https://github.com/bzaat/Badminton_Project">bzaat/Badminton_Project</a>.</div></footer>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.esm.min.mjs";
+  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  mermaid.initialize({ startOnLoad: true, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+</script>
+</body>
+</html>
