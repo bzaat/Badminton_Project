@@ -20,7 +20,9 @@ def truth(tmp_path):
 def cfg(tmp_path, truth):
     base = load_config()
     raw = copy.deepcopy(base.raw)
-    raw["paths"].update(bfmd_root=str(tmp_path / "BFMD_data"), cache_dir=str(tmp_path / "cache"))
+    # every path into tmp_path: a test must never overwrite the real outputs/ (it used to, for task4)
+    raw["paths"].update(bfmd_root=str(tmp_path / "BFMD_data"), cache_dir=str(tmp_path / "cache"),
+                        output_dir=str(tmp_path / "outputs"))
     raw["frame_shift"] = {"player_bbox": syn.BBOX_SHIFT, "shuttle": 0, "pose": 0}
     # synthetic ankles sit exactly on the ground point, so exact-position tests use no offset
     raw["pose"].update(ankle_ground_offset=0.0, box_ground_offset=0.0)
