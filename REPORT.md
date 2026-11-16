@@ -394,6 +394,41 @@ GitHub clone, real checkpoint download, local GPU): 615 s in total, clip identic
 table above are reproduced exactly. Not yet run on a Colab T4 itself; there a different PyTorch /
 OpenCV build may move a few frames, which the tolerance check reports.
 
+## Hit label noise — status: tool ready, human annotation pending
+
+Goal: measure how far BFMD's hit frames are from the true racket–shuttle contact, to tell how
+much of Task 2's ±2 gap (F1 0.736 @±2 vs 0.824 @±5) is label noise. Context: the CoachAI
+Badminton Challenge 2023 also scores hit frames at ±2 frames (30 fps, 720p); ShuttleSet re-labelled
+3 matches for consistency but publishes no agreement number.
+
+```bash
+uv run python -m badminton_analysis labelnoise-kit --match "China-Open-2025-Shi-Yu-Qi-CHN-3-vs.-Wang" \
+    --video <match.mp4> --out <kit>          # ~150 s: sequential decode, 5,500 images
+# open <kit>/index.html, label every item, "Download results"
+uv run python -m badminton_analysis labelnoise-eval --kit <kit> --annotations labelnoise_results.json
+    # -> outputs/labelnoise/{report.md, metrics.json, items.csv}
+```
+
+**Design.** 100 hits from China Open 2025 F (the match with video), stratified by shot type
+(≥ 2 per type), plus 10 repeats for annotator repeatability; seed 0. Each item is 25 frames around
+the BFMD frame, shifted by a random −4..+4, so the label is not at a fixed position; the page
+never reads the key. Crops are centred on the hitter's median box over the window (no leak of the
+label frame); items whose hit frame is not on the main camera (court_perframe flag) open in full
+view. The evaluation reports human − BFMD offsets (mean, |offset|, within 0/±1/±2/±3/±5, bootstrap
+CIs, per shot type, main-camera only, sure only), repeatability, and the Task 2 detector's error
+against both references.
+
+**Checks done.** Video frame index = decoder timestamp index for all 148,950 frames (constant
+30 fps, no gaps), so sequential decoding matches the labels' frame numbers. Pilot of 6 items:
+a first crop design was too loose (whole court) and was replaced; one sampled serve (g2 r12) falls
+in a broadcast **close-up**, and one rally (g2 r15) is a side camera that `court_perframe` marks
+valid, as in Task 1 — the page has "no hit" and full-frame options for these.
+
+**Not done: the annotation itself.** An attempt to label the kit with the model (Claude, viewing
+blinded frame grids and full-resolution zooms) was stopped after 7 items: none could be labelled
+with confidence (contact hidden by blur or by the other player, tiny players on the side camera,
+contact possibly before the window). No offset numbers are reported until a human labels the kit.
+
 ## Milestone 1: how to reproduce
 
 ```bash

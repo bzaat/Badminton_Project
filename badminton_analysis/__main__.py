@@ -53,6 +53,13 @@ def main(argv: list[str] | None = None) -> int:
     e5.add_argument("--match", required=True); e5.add_argument("--pred", required=True, help="<clip>_ball.csv")
     e5.add_argument("--clip-start", type=int, required=True, help="video frame of clip frame 0")
     e5.add_argument("--video", default=None, help="full match video, for overlay images")
+    k = sub.add_parser("labelnoise-kit", help="blinded contact-frame annotation kit from a match video")
+    k.add_argument("--match", required=True); k.add_argument("--video", required=True)
+    k.add_argument("--out", required=True); k.add_argument("--n", type=int, default=100)
+    k.add_argument("--repeats", type=int, default=10); k.add_argument("--seed", type=int, default=0)
+    le = sub.add_parser("labelnoise-eval", help="human contact frames vs BFMD / Task 2 -> outputs/labelnoise/")
+    le.add_argument("--kit", required=True, help="kit folder (with key.json)")
+    le.add_argument("--annotations", required=True, help="labelnoise_results.json from the page")
     a = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     cfg = load_config(a.config)
@@ -63,6 +70,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"\n===== {' '.join(step)} =====", flush=True)
             main((["--config", a.config] if a.config else []) + step)
         print(f"\nMilestone 1 done in {time.time() - t:.0f}s. Reports: {cfg.output_dir}/task{{1,2,3,4}}/ and REPORT.md")
+        return 0
+    if a.cmd == "labelnoise-kit":
+        from .labelnoise import make_kit
+        m = _select(cfg, a.match)
+        if len(m) > 1:
+            sys.exit("ambiguous --match:\n  " + "\n  ".join(m))
+        t = time.time()
+        r = make_kit(cfg, m[0], a.video, a.out, n=a.n, n_repeat=a.repeats, seed=a.seed)
+        print(json.dumps({"match": m[0], "kit": a.out, **r, "seconds": round(time.time() - t)}, indent=1))
+        return 0
+    if a.cmd == "labelnoise-eval":
+        from pathlib import Path
+        from .labelnoise import evaluate
+        key = json.loads((Path(a.kit) / "key.json").read_text())
+        ann = json.loads(Path(a.annotations).read_text())
+        r = evaluate(key, ann, cfg.output_dir / "task2" / "predictions.csv", cfg.output_dir / "labelnoise")
+        print((cfg.output_dir / "labelnoise" / "report.md").read_text())
         return 0
     if a.cmd == "task5-clip":
         from .build import load_match
