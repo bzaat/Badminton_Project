@@ -17,6 +17,10 @@ dependencies = [
 ]
 
 [dependency-groups]
+demo = [
+    "plotly>=7.1.0",
+    "streamlit>=1.65.0",
+]
 dev = [
     "pytest>=9.2.0",
 ]
