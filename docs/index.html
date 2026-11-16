@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Badminton Broadcast Analytics</title>
+<meta name="description" content="Computer-vision pipeline that turns professional badminton broadcast footage into shot timing, shot types and player movement, evaluated leave-one-match-out on the BFMD dataset.">
+<meta property="og:title" content="Badminton Broadcast Analytics">
+<meta property="og:description" content="Hit detection F1 0.736 @ ±2 frames, 12-class shot macro F1 0.707, movement in court metres. Leave-one-match-out on 12 BWF matches.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html">Badminton Analytics</a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="index.html" aria-current="page">Overview</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="impact.html">Results</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <span class="tag status">Milestone 1 done · detector in progress</span>
+    <h1>Shot timing, shot types and player movement from badminton broadcasts</h1>
+    <p class="lead">A computer-vision pipeline on the BFMD dataset (12 BWF Super 1000 men's singles matches, 11,301 hits). Every model is evaluated leave-one-match-out, and every data convention was settled by measurement.</p>
+    <a class="btn" href="https://github.com/bzaat/Badminton_Project">View the code</a>
+    <a class="btn ghost" href="impact.html">See the results</a>
+    <div>
+      <span class="tag">Python</span><span class="tag">scikit-learn</span><span class="tag">OpenCV</span>
+      <span class="tag">PyTorch</span><span class="tag">TrackNetV3</span><span class="tag">pytest</span><span class="tag">Colab</span>
+    </div>
+  </section>
+
+  <div class="stats" role="list">
+    <div class="stat" role="listitem"><div class="v">0.736</div><div class="k">Hit detection F1 at ±2 frames (67 ms)</div></div>
+    <div class="stat" role="listitem"><div class="v">0.707</div><div class="k">Shot-type macro F1, 12 classes (majority baseline 0.034)</div></div>
+    <div class="stat" role="listitem"><div class="v">2.2 px</div><div class="k">Median agreement with an independent tracker, after a dataset fix</div></div>
+    <div class="stat" role="listitem"><div class="v">98.6%</div><div class="k">Serves that obey the service-court rule (555 / 563)</div></div>
+  </div>
+
+  <section>
+    <h2>What it does</h2>
+    <div class="grid2">
+      <div class="card"><h3>When</h3><p>Detects racket–shuttle contacts from shuttle acceleration peaks and wrist cues, with a logistic-regression scorer.</p></div>
+      <div class="card"><h3>What</h3><p>Classifies 12 stroke types from 37 features (rally context, shuttle flight, court position, pose) with gradient-boosted trees.</p></div>
+      <div class="card"><h3>How</h3><p>Maps both players into court metres with a homography and measures distance, speed, zones and recovery positions.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Why it's trustworthy</h2>
+    <ul class="tight">
+      <li><b>No leakage:</b> each parameter is chosen on 11 matches and tested on the 12th; the 9 matches never inspected during design scored higher than the 3 used for it.</li>
+      <li><b>Independent checks:</b> rules of the game (server position, standing still before the serve) and a second tracker run on raw video.</li>
+      <li><b>Problems reported, not hidden:</b> the dataset README's shuttle-centre definition was wrong by 5.12 px; it was found, fixed and its effect measured.</li>
+      <li><b>Reproducible:</b> one command rebuilds everything in about 8 minutes on CPU; 73 automated tests.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Limitations</h2>
+    <p class="note">12 matches, 9 players and one broadcast style. Milestone 1 uses annotations as inputs, so annotation errors cap performance. The object detector has no results yet, and the hit-label-noise measurement is waiting for human annotation.</p>
+  </section>
+</main>
+
+<footer><div class="wrap">Data: <a href="https://openaccess.thecvf.com/content/CVPR2026W/CVsports/papers/Ding_BFMD_A_Full-Match_Badminton_Dense_Dataset_for_Dense_Shot_Captioning_CVPRW_2026_paper.pdf">BFMD</a> (CVPR 2026 Workshops). All numbers from <code>REPORT.md</code> in the repository.</div></footer>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Badminton Analytics Results</title>
+<meta name="description" content="Held-out results for hit detection, shot-type classification, movement measurement and independent tracker agreement.">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="index.html">Badminton Analytics</a>
+    <nav aria-label="Main">
+      <ul>
+        <li><a href="index.html">Overview</a></li>
+        <li><a href="architecture.html">Architecture</a></li>
+        <li><a href="impact.html" aria-current="page">Results</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="hero">
+    <h1>Results</h1>
+    <p class="lead">All held-out, leave-one-match-out, pooled over the 12 matches.</p>
+  </section>
+
+  <section>
+    <h2>Hit detection</h2>
+    <p class="note">Correct if within ±2 frames (67 ms), the tolerance also used by the CoachAI Badminton Challenge 2023.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Variant</th><th>Precision</th><th>Recall</th><th>F1 @ ±2</th><th>F1 @ ±5</th><th aria-hidden="true"></th></tr></thead>
+        <tbody>
+          <tr><td>Pose only (reference)</td><td>0.232</td><td>0.376</td><td>0.287</td><td>0.535</td><td aria-hidden="true"><div class="bar"><span style="width:28.7%"></span></div></td></tr>
+          <tr><td>Shuttle only</td><td>0.701</td><td>0.679</td><td>0.690</td><td>0.775</td><td aria-hidden="true"><div class="bar"><span style="width:69%"></span></div></td></tr>
+          <tr><td>Shuttle + wrist cues (rules)</td><td>0.757</td><td>0.683</td><td>0.718</td><td>0.804</td><td aria-hidden="true"><div class="bar"><span style="width:71.8%"></span></div></td></tr>
+          <tr class="best"><td>Logistic regression</td><td>0.757</td><td>0.716</td><td>0.736</td><td>0.824</td><td aria-hidden="true"><div class="bar"><span style="width:73.6%"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Serves are the main failure (recall 0.133: the shuttle starts from rest); recall excluding serves is 0.768. The hitter side is right for 80.3% of detected hits.</p>
+  </section>
+
+  <section>
+    <h2>Shot types (12 classes)</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Model</th><th>Accuracy</th><th>Macro F1 [95% CI]</th><th aria-hidden="true"></th></tr></thead>
+        <tbody>
+          <tr><td>Majority class</td><td>0.254</td><td>0.034</td><td aria-hidden="true"><div class="bar"><span style="width:3.4%"></span></div></td></tr>
+          <tr><td>Logistic regression</td><td>0.736</td><td>0.646 [0.601, 0.676]</td><td aria-hidden="true"><div class="bar"><span style="width:64.6%"></span></div></td></tr>
+          <tr class="best"><td>Gradient-boosted trees</td><td>0.793</td><td>0.707 [0.661, 0.737]</td><td aria-hidden="true"><div class="bar"><span style="width:70.7%"></span></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="tight note">
+      <li>Strongest: serve 0.95, lift 0.90, net shot 0.88, smash 0.84. Weakest: push 0.49, press 0.42.</li>
+      <li>Unseen players (3 players, 1,529 hits): 0.713 vs 0.704 for seen players. Weak evidence, stated as such.</li>
+      <li>End to end, 48.4% of annotated hits are both detected and correctly classified.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Movement and tracking</h2>
+    <div class="stats">
+      <div class="stat"><div class="v">0.08–0.10</div><div class="k">m/s noise floor (players must stand still before the serve)</div></div>
+      <div class="stat"><div class="v">101–124</div><div class="k">metres per minute of rally play, per match</div></div>
+      <div class="stat"><div class="v">0.883</div><div class="k">visibility agreement with TrackNetV3 on raw video</div></div>
+      <div class="stat"><div class="v">10.5 / 2.2 / 11.1</div><div class="k">median px at frame shift −1 / 0 / +1: alignment is exact</div></div>
+    </div>
+    <p class="note">Measured bias kept in the report: the far side reads faster for 9/9 players (sign test p ≈ 0.004), a pixel-density effect, and absolute distances are uncertain by about ±10–20%.</p>
+  </section>
+
+  <section>
+    <h2>Fixing the dataset's documentation</h2>
+    <div class="card">
+      <p>BFMD's README defines the shuttle centre as the box centre. Running TrackNetV3 on raw video showed a constant −6.12 px offset in both axes; at 10× zoom the box's corner sits on the shuttle. After the fix, the trackers agree to a median of 2.2 px, and in the detector's labels the share of shuttle boxes reaching IoU ≥ 0.5 with the independent tracker rose from 0.7% to 55%.</p>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap">All numbers from <code>REPORT.md</code> in <a href="https://github.com/bzaat/Badminton_Project">bzaat/Badminton_Project</a>.</div></footer>
+</body>
+</html>
