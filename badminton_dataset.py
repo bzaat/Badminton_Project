@@ -4,7 +4,8 @@ BFMD (Full-Match Badminton Dataset) -> object-detection dataset.
 Detection classes (0 = background, as torchvision detection models expect):
     1 top_player     from annotations/player_bbox  (Label Studio, percent coords)
     2 bottom_player  from annotations/player_bbox
-    3 shuttle        from annotations/shuttle      (TrackNet predictions, percent coords)
+    3 shuttle        from annotations/shuttle      (TrackNet predictions, percent coords;
+                                                    10.24 px box centred on the (x, y) point)
 
 Annotations only exist inside rallies, so every sample is one rally frame of one
 singles match. Images come either from
@@ -42,6 +43,9 @@ CLASSES = ["__background__", "top_player", "bottom_player", "shuttle"]
 _PLAYER_LABELS = {"Top_Player": 1, "Bottom_Player": 2}
 SHUTTLE = 3
 IMG_W, IMG_H = 1280, 720  # all BFMD videos are 1280x720 @ 30 fps
+# Bump when parse_match output changes, so old .npz caches are rebuilt.
+# 2: shuttle boxes centred on the TrackNet (x, y) point (v1 caches have no version key).
+CACHE_VERSION = 2
 
 # Default location of the data; works from Windows Python and from WSL.
 DEFAULT_ROOT = (
@@ -75,6 +79,19 @@ def _pct_to_xyxy(x, y, w, h):
     return [x1, y1, x1 + w * IMG_W / 100.0, y1 + h * IMG_H / 100.0]
 
 
+def _shuttle_pct_to_xyxy(x, y, w, h):
+    """BFMD shuttle (TrackNet point + fixed 10.24 px dummy size) -> pixel xyxy centred on (x, y).
+
+    The shuttle is at the (x, y) corner, not at (x + w/2, y + h/2) as BFMD's README says:
+    checked on video (China Open F) and against an independent TrackNetV3 run (median 2.2 px),
+    see badminton_analysis.raw.load_shuttle. Using the stored box as-is shifts it 5.12 px
+    down-right of the shuttle (IoU 0.14 with the centred box).
+    """
+    cx, cy = x * IMG_W / 100.0, y * IMG_H / 100.0
+    hw, hh = w * IMG_W / 200.0, h * IMG_H / 200.0
+    return [cx - hw, cy - hh, cx + hw, cy + hh]
+
+
 def parse_match(ann_root: str, match: str) -> dict:
     """
     Returns {"frames": int64 (N,), "boxes": float32 (N, 3, 4)} where boxes[i, c-1]
@@ -102,7 +119,7 @@ def parse_match(ann_root: str, match: str) -> dict:
     for track in sh["predictions"][0]["result"]:
         for s in track["value"]["sequence"]:
             if s.get("enabled", True):
-                slot(int(s["frame"]))[SHUTTLE - 1] = _pct_to_xyxy(s["x"], s["y"], s["width"], s["height"])
+                slot(int(s["frame"]))[SHUTTLE - 1] = _shuttle_pct_to_xyxy(s["x"], s["y"], s["width"], s["height"])
 
     frames = np.array(sorted(per_frame), dtype=np.int64)
     boxes = np.stack([per_frame[f] for f in frames]) if len(frames) else np.zeros((0, 3, 4), np.float32)
@@ -116,11 +133,12 @@ def load_match(ann_root: str, match: str, cache_dir: str | None) -> dict:
     cache = os.path.join(cache_dir, f"{match}.npz")
     srcs = [os.path.join(ann_root, d, f"{match}.json") for d in ("player_bbox", "shuttle")]
     if os.path.exists(cache) and os.path.getmtime(cache) >= max(os.path.getmtime(s) for s in srcs):
-        z = np.load(cache)
-        return {"frames": z["frames"], "boxes": z["boxes"]}
+        with np.load(cache) as z:
+            if "version" in z.files and int(z["version"]) == CACHE_VERSION:
+                return {"frames": z["frames"], "boxes": z["boxes"]}
     data = parse_match(ann_root, match)
     os.makedirs(cache_dir, exist_ok=True)
-    np.savez_compressed(cache, **data)
+    np.savez_compressed(cache, version=np.int64(CACHE_VERSION), **data)
     return data
 
 
