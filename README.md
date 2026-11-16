@@ -2,6 +2,8 @@
 
 > **Status: work in progress.** The dataset loader and training script are in place, but no full training run or benchmark results have been published yet. Results will be added here once available.
 
+**Live demo:** [bzaat-badminton-project-demoapp-jeh69y.streamlit.app](https://bzaat-badminton-project-demoapp-jeh69y.streamlit.app/) (Streamlit Community Cloud): held-out hit-detection and shot-type results, per-match scores, confusion matrix and per-player movement summaries. The frame-by-frame rally replay runs locally with the dataset (see below).
+
 **Project showcase:** [bzaat.github.io/Badminton_Project](https://bzaat.github.io/Badminton_Project/): Milestone 1 (hit detection, shot types, movement, TrackNetV3 check) in three pages. Source in `docs/`; numbers from `REPORT.md`.
 
 **Interactive demo (Streamlit, local):** `uv run --group demo streamlit run demo/app.py`. Pick any rally of the 12 matches and step through it frame by frame: annotations on the frame (or the broadcast video if `<match>.mp4` is in `video_root` or `D:/badminton/videos`), both players on a top-down court in metres, the shuttle-speed timeline with annotated vs detected hits, and annotated vs predicted shot types. Further tabs show per-match movement and the held-out model results. Needs the BFMD package and the Milestone 1 outputs (`python -m badminton_analysis all`). Without the dataset (e.g. on [Streamlit Community Cloud](https://bzaat-badminton-project-demoapp-jeh69y.streamlit.app/), which installs `demo/requirements.txt`) the app shows the held-out results and per-match movement summaries from `demo/public_results.json` (aggregate numbers only; regenerate with `uv run python demo/export_public.py`).
