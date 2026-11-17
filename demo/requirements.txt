@@ -1,9 +1,12 @@
 # Dependencies for the demo only (Streamlit Community Cloud reads this file first because it sits
 # next to the entrypoint demo/app.py). No torch: the demo never trains or runs a network.
-streamlit==1.65.0
-plotly==7.1.0
-numpy==2.2.6
-pandas==2.3.3
-pyyaml==6.0.3
-matplotlib==3.10.9
-opencv-python-headless==5.0.0.93
+# Ranges, not exact pins: Cloud may run any Python 3.10-3.14, and an exact pin with no wheel for
+# that Python (numpy 2.2.6 has none for 3.14) makes the whole install fail, so the app then starts
+# without plotly.
+streamlit>=1.65,<2
+plotly>=7.1,<8
+numpy>=2.2.6,<3
+pandas>=2.3.3,<3
+pyyaml>=6.0.3,<7
+matplotlib>=3.10.9,<4
+opencv-python-headless>=5.0.0.93,<6
