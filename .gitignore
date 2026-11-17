@@ -34,6 +34,10 @@ runs/
 # IDE
 .idea/
 
-# AI pipeline scratch files (scripts/auto-dev.sh)
-.claude/current-task.md
-.claude/commit-message.txt
+# Secrets and credentials (never commit)
+.env
+.env.*
+*.pem
+*.key
+credentials*.json
+*-credentials.json
